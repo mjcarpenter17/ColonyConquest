@@ -1,0 +1,16 @@
+{
+  "name": "Colony Conquest",
+  "short_name": "ColonyConquest",
+  "description": "A turn-based hexagonal strategy game of territorial conquest and resource management.",
+  "start_url": "/index.html",
+  "display": "fullscreen",
+  "background_color": "#2C3E50",
+  "theme_color": "#4169E1",
+  "icons": [
+    {
+      "src": "assets/images/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

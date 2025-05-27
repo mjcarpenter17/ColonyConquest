@@ -1,0 +1,21 @@
+{
+  "name": "colony-conquest",
+  "version": "0.1.0",
+  "description": "A turn-based strategy game with hexagonal grid-based territorial conquest",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": [
+    "game",
+    "strategy",
+    "hexagon",
+    "turn-based"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

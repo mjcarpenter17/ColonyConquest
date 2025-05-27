@@ -126,6 +126,61 @@ body {
     color: var(--food-color);
 }
 
+/* Message system styles */
+.message-container {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    width: 80%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.message {
+    margin-bottom: 10px;
+    padding: 10px 15px;
+    border-radius: 5px;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: message-fade-in 0.5s ease;
+    width: 100%;
+    text-align: center;
+}
+
+.message.info {
+    background-color: #3498db;
+}
+
+.message.success {
+    background-color: #2ecc71;
+}
+
+.message.warning {
+    background-color: #f39c12;
+}
+
+.message.error {
+    background-color: #e74c3c;
+}
+
+.message.fade-out {
+    animation: message-fade-out 0.5s ease forwards;
+}
+
+@keyframes message-fade-in {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes message-fade-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
+}
+
 /* Responsive styles */
 @media (max-width: 768px) {
     .resource {
