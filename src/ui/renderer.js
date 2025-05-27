@@ -93,8 +93,7 @@ const Renderer = (function() {
         render();
         _animationFrameId = requestAnimationFrame(renderLoop);
     }
-    
-    /**
+      /**
      * Main render function
      */
     function render() {
@@ -111,6 +110,40 @@ const Renderer = (function() {
         
         // Get territories and render them
         const territories = HexGrid.getAllHexes();
+        const size = territories.size;
+        
+        if (CONSTANTS.DEBUG_MODE && territories.size === 0) {
+            console.error('No territories to render!');
+            
+            // Draw a debug message on canvas
+            _ctx.restore(); // Restore context before drawing text
+            _ctx.font = '24px Arial';
+            _ctx.fillStyle = 'white';
+            _ctx.textAlign = 'center';
+            _ctx.fillText('Error: No territories to render', _width / 2, _height / 2);
+            
+            // Draw a single debug hexagon in the center
+            _ctx.strokeStyle = 'red';
+            _ctx.lineWidth = 3;
+            _ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = 2 * Math.PI / 6 * i + Math.PI / 6;
+                const x = _width / 2 + 100 * Math.cos(angle);
+                const y = _height / 2 + 100 * Math.sin(angle);
+                if (i === 0) _ctx.moveTo(x, y);
+                else _ctx.lineTo(x, y);
+            }
+            _ctx.closePath();
+            _ctx.stroke();
+            
+            return;
+        }
+        
+        // Log the number of territories if in debug mode
+        if (CONSTANTS.DEBUG_MODE && size > 0 && _animationFrameId % 60 === 0) {
+            console.log(`Rendering ${size} territories`);
+        }
+        
         territories.forEach(territory => {
             renderHexagon(territory);
         });

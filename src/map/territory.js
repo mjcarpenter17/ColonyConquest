@@ -43,8 +43,7 @@ class Territory {
         this.secondaryResource = resourceType;
         this.secondaryValue = resourceValue;
     }
-    
-    /**
+      /**
      * Update the territory owner based on influence
      * 
      * @returns {boolean} - Whether ownership changed
@@ -84,7 +83,8 @@ class Territory {
         // Update owner if changed
         if (ownershipChanged) {
             this.owner = maxOwner;
-            this.lastCaptured = GameState.getCurrentTurn();
+            // Using a safer way to track the turn number
+            this.lastCaptured = window.GameState ? GameState.getCurrentTurn() : 1;
         }
         
         return ownershipChanged;
