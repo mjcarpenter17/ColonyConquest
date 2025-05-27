@@ -3,8 +3,6 @@
  */
 
 const CONSTANTS = {
-    // Debug Mode
-    DEBUG_MODE: true,
     // Map Configuration
     MAP_WIDTH: 7,
     MAP_HEIGHT: 7,
