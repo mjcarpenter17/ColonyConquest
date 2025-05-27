@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colony Conquest</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="resource-bar">
+            <div class="resource gold">
+                <span class="resource-icon">🪙</span>
+                <span class="resource-value" id="gold-value">10</span>
+            </div>
+            <div class="resource timber">
+                <span class="resource-icon">🌲</span>
+                <span class="resource-value" id="timber-value">10</span>
+            </div>
+            <div class="resource iron">
+                <span class="resource-icon">⚙️</span>
+                <span class="resource-value" id="iron-value">10</span>
+            </div>
+            <div class="resource food">
+                <span class="resource-icon">🌾</span>
+                <span class="resource-value" id="food-value">10</span>
+            </div>
+        </div>
+        <canvas id="game-canvas"></canvas>
+        <div class="info-panel">
+            <div id="territory-info" class="territory-info hidden">
+                <h3 id="territory-name">Territory</h3>
+                <div class="territory-details">
+                    <p>Owner: <span id="territory-owner">None</span></p>
+                    <p>Primary Resource: <span id="territory-resource">Gold</span> (<span id="resource-value">3</span>)</p>
+                    <p>Secondary Resource: <span id="secondary-resource">Timber</span> (<span id="secondary-value">1</span>)</p>
+                </div>
+                <div class="territory-influence">
+                    <p>Influence: <span id="territory-influence">Neutral (5)</span></p>
+                </div>
+            </div>
+            <div class="turn-info">
+                <p>Turn: <span id="turn-number">1</span></p>
+                <p>Player: <span id="active-player">Player</span></p>
+            </div>
+            <button id="end-turn-btn" class="end-turn-btn">End Turn</button>
+        </div>
+    </div>
+
+    <!-- Core Scripts -->
+    <script src="src/utils/constants.js"></script>
+    <script src="src/utils/math-utils.js"></script>
+    <script src="src/core/game-state.js"></script>
+    <script src="src/core/resource-manager.js"></script>
+    <script src="src/core/turn-manager.js"></script>
+    <script src="src/map/hex-grid.js"></script>
+    <script src="src/map/territory.js"></script>
+    <script src="src/map/map-generator.js"></script>
+    <script src="src/ui/renderer.js"></script>
+    <script src="src/ui/input-handler.js"></script>
+    <script src="src/ui/ui-components.js"></script>
+    <script src="src/main.js"></script>
+</body>
+</html>
