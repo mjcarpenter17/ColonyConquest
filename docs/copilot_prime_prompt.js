@@ -12,16 +12,13 @@ GAME DESIGN OVERVIEW
 ==============================================================================
 
 CORE CONCEPT:
-- Territory control through emergent narrative
+- Territory control
 - Turn-based strategy with hexagonal grid (7x7 = 49 territories)
 - Resource management: Gold, Timber, Iron, Food
 - Target session length: 15-20 minutes
-- Unique "Influence Web" diplomacy system
 
 VICTORY CONDITIONS:
 1. Territorial Dominance: Control 80% of map
-2. Economic Victory: Accumulate 100 of each resource
-3. Influence Victory: Control all Strategic Points for 5 turns
 
 PSYCHOLOGICAL HOOKS:
 - Variable reward schedule (random events every 3-7 turns)
@@ -34,7 +31,7 @@ TECHNICAL SPECIFICATIONS
 ==============================================================================
 
 TECH STACK:
-- Vanilla JavaScript ES6+ (no frameworks/libraries)
+- JavaScript with Phaser Framework
 - HTML5 Canvas for rendering
 - CSS3 for UI styling
 - Target: 60fps performance, <3s load time
@@ -141,24 +138,6 @@ COMBAT SYSTEM:
 - Clear win/loss feedback with reasoning
 
 ==============================================================================
-INFLUENCE WEB SYSTEM (UNIQUE INNOVATION)
-==============================================================================
-
-CONCEPT:
-- Each territory generates influence points based on resources
-- Influence flows to adjacent territories
-- When influences meet, creates dynamic diplomatic effects
-
-MECHANICS:
-- Neutral Zones: Territories where influences balance
-- Contested Borders: Enhanced combat bonuses
-- Alliance Pressure: AI becomes friendly/hostile based on influence
-- Trade Routes: Enhanced resource generation between influenced territories
-
-CALCULATION:
-influence_flow = base_territory_value * resource_multiplier * distance_decay
-
-==============================================================================
 AI PERSONALITY SYSTEM
 ==============================================================================
 
@@ -192,7 +171,7 @@ CRITICAL PATH:
 5. Game state initialization and management
 
 CODING STANDARDS:
-- Use const/let appropriately (no var)
+- Use const/let appropriately 
 - Arrow functions for callbacks
 - Template literals for string interpolation
 - Destructuring for object/array access
@@ -212,7 +191,7 @@ CURRENT TASK: HEXAGONAL GRID FOUNDATION
 
 IMMEDIATE GOALS:
 1. Implement hex coordinate system with proper math
-2. Create hex-to-pixel and pixel-to-hex conversion functions
+2. TBD
 3. Build territory rendering system with color coding
 4. Add mouse/touch interaction for territory selection
 5. Establish basic game loop structure

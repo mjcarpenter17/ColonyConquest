@@ -1,450 +1,411 @@
 /**
- * GameState module for central game state management
+ * Colony Conquest - Game State Management
+ * Central state management for the entire game
  */
 
-const GameState = (function() {
-    // Private game state
-    const _state = {
-        currentTurn: 1,
-        phase: CONSTANTS.PHASES.PLAYER_TURN,
-        activePlayer: CONSTANTS.PLAYERS.PLAYER,
-        territories: new Map(),
-        players: {
-            [CONSTANTS.PLAYERS.PLAYER]: {
-                resources: {
-                    [CONSTANTS.RESOURCE_TYPES.GOLD]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.TIMBER]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.IRON]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.FOOD]: 10
-                },
-                units: [],
-                momentum: 0,
-                influencePoints: 0,
-                personality: null
-            },
-            [CONSTANTS.PLAYERS.AI]: {
-                resources: {
-                    [CONSTANTS.RESOURCE_TYPES.GOLD]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.TIMBER]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.IRON]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.FOOD]: 10
-                },
-                units: [],
-                momentum: 0,
-                influencePoints: 0,
-                personality: "industrialist" // Default AI personality
-            },
-            [CONSTANTS.PLAYERS.NEUTRAL]: {
-                resources: {
-                    [CONSTANTS.RESOURCE_TYPES.GOLD]: 0,
-                    [CONSTANTS.RESOURCE_TYPES.TIMBER]: 0,
-                    [CONSTANTS.RESOURCE_TYPES.IRON]: 0,
-                    [CONSTANTS.RESOURCE_TYPES.FOOD]: 0
-                },
-                units: [],
-                momentum: 0,
-                influencePoints: 0,
-                personality: null
-            }
-        },
-        actionQueue: [],
-        randomEventTimer: 3, // Turns until next random event
-        victoryProgress: {
-            territorial: 0,
-            economic: false,
-            influence: 0
-        },
-        selectedTerritory: null
-    };
-    
-    // Event system for state changes
-    const _events = {
-        stateChanged: [],
-        territorySelected: [],
-        resourcesChanged: [],
-        turnChanged: [],
-        phaseChanged: []
-    };
-    
+import { GAME_CONFIG, RESOURCE_TYPES, OWNERS, TURN_PHASES, GAME_STATES } from '../utils/constants.js';
+
+/**
+ * GameState class - Manages all game data and state transitions
+ */
+export class GameState {
+    constructor() {
+        this.initialize();
+    }
+
     /**
-     * Subscribe to an event
-     * 
-     * @param {string} event - Event name
-     * @param {function} callback - Callback function
-     * @returns {function} - Unsubscribe function
+     * Initialize the game state with default values
      */
-    function subscribe(event, callback) {
-        if (!_events[event]) {
-            _events[event] = [];
-        }
+    initialize() {
+        this.gameStatus = GAME_STATES.LOADING;
+        this.currentTurn = 1;
+        this.currentPlayer = OWNERS.PLAYER;
+        this.currentPhase = TURN_PHASES.ACTION_PHASE;
         
-        _events[event].push(callback);
-        
-        // Return unsubscribe function
-        return function() {
-            _events[event] = _events[event].filter(cb => cb !== callback);
+        // Player resources
+        this.resources = {
+            [OWNERS.PLAYER]: { ...GAME_CONFIG.INITIAL_RESOURCES },
+            [OWNERS.AI]: { ...GAME_CONFIG.INITIAL_RESOURCES }
         };
+        
+        // Territory management
+        this.territories = new Map();
+        this.selectedTerritory = null;
+        
+        // Game history and statistics
+        this.turnHistory = [];
+        this.gameEvents = [];
+        this.statistics = {
+            territoriesOwned: {
+                [OWNERS.PLAYER]: 0,
+                [OWNERS.AI]: 0,
+                [OWNERS.NEUTRAL]: 0
+            },
+            resourcesCollected: {
+                [OWNERS.PLAYER]: { gold: 0, wood: 0, metal: 0, food: 0 },
+                [OWNERS.AI]: { gold: 0, wood: 0, metal: 0, food: 0 }
+            }
+        };
+        
+        // Victory conditions tracking
+        this.victoryProgress = {
+            territorialDominance: {
+                [OWNERS.PLAYER]: 0,
+                [OWNERS.AI]: 0
+            },
+            economicProgress: {
+                [OWNERS.PLAYER]: 0,
+                [OWNERS.AI]: 0
+            },
+            strategicPointsHeld: {
+                [OWNERS.PLAYER]: 0,
+                [OWNERS.AI]: 0,
+                turnsHeld: 0
+            }
+        };
+        
+        // Event listeners for state changes
+        this.listeners = {
+            territoryChanged: [],
+            resourceChanged: [],
+            turnChanged: [],
+            gameStateChanged: [],
+            victoryConditionMet: []
+        };
+        
+        console.log('🎮 GameState initialized');
     }
-    
+
     /**
-     * Emit an event to all subscribers
-     * 
-     * @param {string} event - Event name
-     * @param {*} data - Event data
+     * Add event listener for state changes
      */
-    function emit(event, data) {
-        if (_events[event]) {
-            _events[event].forEach(callback => callback(data));
+    addEventListener(event, callback) {
+        if (this.listeners[event]) {
+            this.listeners[event].push(callback);
         }
     }
-    
+
     /**
-     * Initialize game state with generated territories
-     * 
-     * @param {Map} territories - Map of territories
+     * Remove event listener
      */
-    function initialize(territories) {
-        _state.territories = territories;
-        _state.currentTurn = 1;
-        _state.phase = CONSTANTS.PHASES.PLAYER_TURN;
-        _state.activePlayer = CONSTANTS.PLAYERS.PLAYER;
-        _state.selectedTerritory = null;
-        
-        // Reset player resources
-        Object.values(CONSTANTS.PLAYERS).forEach(player => {
-            if (_state.players[player]) {
-                _state.players[player].resources = {
-                    [CONSTANTS.RESOURCE_TYPES.GOLD]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.TIMBER]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.IRON]: 10,
-                    [CONSTANTS.RESOURCE_TYPES.FOOD]: 10
-                };
-                _state.players[player].units = [];
-                _state.players[player].momentum = 0;
-                _state.players[player].influencePoints = 0;
+    removeEventListener(event, callback) {
+        if (this.listeners[event]) {
+            const index = this.listeners[event].indexOf(callback);
+            if (index > -1) {
+                this.listeners[event].splice(index, 1);
             }
-        });
-        
-        // Notify subscribers
-        emit('stateChanged', _state);
-    }
-    
-    /**
-     * End the current player's turn
-     */
-    function endTurn() {
-        // Toggle active player
-        _state.activePlayer = _state.activePlayer === CONSTANTS.PLAYERS.PLAYER 
-            ? CONSTANTS.PLAYERS.AI 
-            : CONSTANTS.PLAYERS.PLAYER;
-        
-        // If we've gone through all players, advance to the next turn
-        if (_state.activePlayer === CONSTANTS.PLAYERS.PLAYER) {
-            _state.currentTurn++;
-            
-            // Decrement random event timer
-            _state.randomEventTimer--;
-            
-            // Check for random event
-            if (_state.randomEventTimer <= 0) {
-                // TODO: Trigger random event
-                
-                // Reset timer to random value between 3-7 turns
-                _state.randomEventTimer = Math.floor(Math.random() * 5) + 3;
-            }
-            
-            // Update territory production
-            updateResourceProduction();
-            
-            // Check victory conditions
-            checkVictoryConditions();
         }
-        
-        // Update phase
-        _state.phase = _state.activePlayer === CONSTANTS.PLAYERS.PLAYER 
-            ? CONSTANTS.PHASES.PLAYER_TURN 
-            : CONSTANTS.PHASES.AI_TURN;
-        
-        // Notify subscribers
-        emit('turnChanged', {
-            currentTurn: _state.currentTurn,
-            activePlayer: _state.activePlayer
-        });
-        
-        emit('phaseChanged', {
-            phase: _state.phase
-        });
     }
-    
+
+    /**
+     * Emit event to all listeners
+     */
+    emit(event, data) {
+        if (this.listeners[event]) {
+            this.listeners[event].forEach(callback => callback(data));
+        }
+    }
+
+    /**
+     * Add a territory to the game state
+     */
+    addTerritory(territory) {
+        this.territories.set(territory.id, territory);
+        this.updateStatistics();
+        this.emit('territoryChanged', { action: 'added', territory });
+    }
+
+    /**
+     * Get territory by ID
+     */
+    getTerritory(id) {
+        return this.territories.get(id);
+    }
+
+    /**
+     * Get all territories owned by a player
+     */
+    getTerritoriesByOwner(owner) {
+        return Array.from(this.territories.values()).filter(t => t.owner === owner);
+    }
+
+    /**
+     * Change territory ownership
+     */
+    setTerritoryOwner(territoryId, newOwner) {
+        const territory = this.territories.get(territoryId);
+        if (territory) {
+            const oldOwner = territory.owner;
+            territory.owner = newOwner;
+            
+            this.updateStatistics();
+            this.checkVictoryConditions();
+            
+            this.emit('territoryChanged', { 
+                action: 'ownership_changed', 
+                territory, 
+                oldOwner, 
+                newOwner 
+            });
+            
+            console.log(`🏴 Territory ${territoryId} claimed by ${newOwner}`);
+        }
+    }
+
     /**
      * Select a territory
-     * 
-     * @param {string} territoryId - Territory ID
-     * @returns {boolean} - Whether selection was successful
      */
-    function selectTerritory(territoryId) {
-        // Clear previous selection
-        if (_state.selectedTerritory) {
-            const prevTerritory = _state.territories.get(_state.selectedTerritory);
-            if (prevTerritory) {
-                prevTerritory.setSelected(false);
-            }
-        }
-        
-        // Set new selection
-        const territory = _state.territories.get(territoryId);
+    selectTerritory(territoryId) {
+        const territory = this.territories.get(territoryId);
         if (territory) {
-            _state.selectedTerritory = territoryId;
-            territory.setSelected(true);
-            emit('territorySelected', territory);
-            return true;
+            this.selectedTerritory = territory;
+            this.emit('territoryChanged', { action: 'selected', territory });
+        }
+    }
+
+    /**
+     * Deselect territory
+     */
+    deselectTerritory() {
+        if (this.selectedTerritory) {
+            const territory = this.selectedTerritory;
+            this.selectedTerritory = null;
+            this.emit('territoryChanged', { action: 'deselected', territory });
+        }
+    }
+
+    /**
+     * Add resources to a player
+     */
+    addResources(player, resourceType, amount) {
+        if (this.resources[player] && this.resources[player][resourceType] !== undefined) {
+            this.resources[player][resourceType] += amount;
+            this.statistics.resourcesCollected[player][resourceType] += amount;
+            
+            this.emit('resourceChanged', { 
+                player, 
+                resourceType, 
+                amount, 
+                newTotal: this.resources[player][resourceType] 
+            });
+        }
+    }
+
+    /**
+     * Spend resources for a player
+     */
+    spendResources(player, costs) {
+        // Check if player has enough resources
+        for (const [resourceType, cost] of Object.entries(costs)) {
+            if (this.resources[player][resourceType] < cost) {
+                return false; // Not enough resources
+            }
         }
         
-        _state.selectedTerritory = null;
-        emit('territorySelected', null);
-        return false;
-    }
-    
-    /**
-     * Clear territory selection
-     */
-    function clearSelection() {
-        if (_state.selectedTerritory) {
-            const territory = _state.territories.get(_state.selectedTerritory);
-            if (territory) {
-                territory.setSelected(false);
-            }
-            _state.selectedTerritory = null;
-            emit('territorySelected', null);
+        // Spend the resources
+        for (const [resourceType, cost] of Object.entries(costs)) {
+            this.resources[player][resourceType] -= cost;
+            this.emit('resourceChanged', { 
+                player, 
+                resourceType, 
+                amount: -cost, 
+                newTotal: this.resources[player][resourceType] 
+            });
         }
+        
+        return true;
     }
-    
+
     /**
-     * Update resource production from territories
+     * Get player resources
      */
-    function updateResourceProduction() {
-        // Only produce resources at the beginning of player turn
-        // To avoid double production
-        if (_state.activePlayer !== CONSTANTS.PLAYERS.PLAYER) {
+    getResources(player) {
+        return { ...this.resources[player] };
+    }
+
+    /**
+     * Collect resources for a player based on owned territories
+     */
+    collectResources(player) {
+        const ownedTerritories = this.getTerritoriesByOwner(player);
+        const collected = { gold: 0, wood: 0, metal: 0, food: 0 };
+        
+        ownedTerritories.forEach(territory => {
+            const resourceType = territory.resourceType;
+            const amount = territory.resourceValue;
+            
+            this.addResources(player, resourceType, amount);
+            collected[resourceType] += amount;
+        });
+        
+        console.log(`💰 ${player} collected:`, collected);
+        return collected;
+    }
+
+    /**
+     * Advance to next turn
+     */
+    nextTurn() {
+        // Save current turn state
+        this.turnHistory.push({
+            turn: this.currentTurn,
+            player: this.currentPlayer,
+            phase: this.currentPhase,
+            resources: JSON.parse(JSON.stringify(this.resources)),
+            territories: this.getStateSummary()
+        });
+        
+        if (this.currentPlayer === OWNERS.PLAYER) {
+            this.currentPlayer = OWNERS.AI;
+            this.currentPhase = TURN_PHASES.ACTION_PHASE;
+        } else {
+            this.currentPlayer = OWNERS.PLAYER;
+            this.currentTurn++;
+            this.currentPhase = TURN_PHASES.RESOURCE_COLLECTION;
+            
+            // Collect resources for both players at start of new turn
+            this.collectResources(OWNERS.PLAYER);
+            this.collectResources(OWNERS.AI);
+            
+            this.currentPhase = TURN_PHASES.ACTION_PHASE;
+        }
+        
+        this.checkVictoryConditions();
+        this.emit('turnChanged', {
+            turn: this.currentTurn,
+            player: this.currentPlayer,
+            phase: this.currentPhase
+        });
+        
+        console.log(`🔄 Turn ${this.currentTurn} - ${this.currentPlayer}'s turn`);
+    }
+
+    /**
+     * Update game statistics
+     */
+    updateStatistics() {
+        // Count territories by owner
+        this.statistics.territoriesOwned = {
+            [OWNERS.PLAYER]: 0,
+            [OWNERS.AI]: 0,
+            [OWNERS.NEUTRAL]: 0
+        };
+        
+        this.territories.forEach(territory => {
+            const owner = territory.owner || OWNERS.NEUTRAL;
+            this.statistics.territoriesOwned[owner]++;
+        });
+        
+        // Update victory progress
+        const totalTerritories = this.territories.size;
+        this.victoryProgress.territorialDominance[OWNERS.PLAYER] = 
+            this.statistics.territoriesOwned[OWNERS.PLAYER] / totalTerritories;
+        this.victoryProgress.territorialDominance[OWNERS.AI] = 
+            this.statistics.territoriesOwned[OWNERS.AI] / totalTerritories;
+    }
+
+    /**
+     * Check victory conditions
+     */
+    checkVictoryConditions() {
+        // Territorial Dominance (80% of territories)
+        if (this.victoryProgress.territorialDominance[OWNERS.PLAYER] >= GAME_CONFIG.VICTORY_CONDITIONS.TERRITORIAL_DOMINANCE) {
+            this.triggerVictory(OWNERS.PLAYER, 'territorial_dominance');
+            return;
+        }
+        if (this.victoryProgress.territorialDominance[OWNERS.AI] >= GAME_CONFIG.VICTORY_CONDITIONS.TERRITORIAL_DOMINANCE) {
+            this.triggerVictory(OWNERS.AI, 'territorial_dominance');
             return;
         }
         
-        // Initialize production tracking
-        const production = {
-            [CONSTANTS.PLAYERS.PLAYER]: {
-                [CONSTANTS.RESOURCE_TYPES.GOLD]: 0,
-                [CONSTANTS.RESOURCE_TYPES.TIMBER]: 0,
-                [CONSTANTS.RESOURCE_TYPES.IRON]: 0,
-                [CONSTANTS.RESOURCE_TYPES.FOOD]: 0
-            },
-            [CONSTANTS.PLAYERS.AI]: {
-                [CONSTANTS.RESOURCE_TYPES.GOLD]: 0,
-                [CONSTANTS.RESOURCE_TYPES.TIMBER]: 0,
-                [CONSTANTS.RESOURCE_TYPES.IRON]: 0,
-                [CONSTANTS.RESOURCE_TYPES.FOOD]: 0
-            }
+        // Economic Victory (100 of each resource)
+        const economicThreshold = GAME_CONFIG.VICTORY_CONDITIONS.ECONOMIC_VICTORY;
+        if (this.checkEconomicVictory(OWNERS.PLAYER, economicThreshold)) {
+            this.triggerVictory(OWNERS.PLAYER, 'economic');
+            return;
+        }
+        if (this.checkEconomicVictory(OWNERS.AI, economicThreshold)) {
+            this.triggerVictory(OWNERS.AI, 'economic');
+            return;
+        }
+    }
+
+    /**
+     * Check if player has achieved economic victory
+     */
+    checkEconomicVictory(player, threshold) {
+        const resources = this.resources[player];
+        return Object.values(resources).every(amount => amount >= threshold);
+    }
+
+    /**
+     * Trigger victory condition
+     */
+    triggerVictory(winner, condition) {
+        this.gameStatus = GAME_STATES.VICTORY;
+        this.emit('victoryConditionMet', { winner, condition });
+        console.log(`🏆 Victory! ${winner} wins by ${condition}`);
+    }
+
+    /**
+     * Get current game state summary
+     */
+    getStateSummary() {
+        return {
+            turn: this.currentTurn,
+            player: this.currentPlayer,
+            phase: this.currentPhase,
+            status: this.gameStatus,
+            territories: this.statistics.territoriesOwned,
+            resources: this.resources,
+            victoryProgress: this.victoryProgress
         };
-        
-        // Calculate production from each territory
-        _state.territories.forEach(territory => {
-            if (territory.owner !== CONSTANTS.PLAYERS.NEUTRAL) {
-                const territoryProduction = territory.getProduction();
-                
-                // Add production to the appropriate player
-                Object.keys(territoryProduction).forEach(resourceType => {
-                    production[territory.owner][resourceType] += territoryProduction[resourceType];
+    }
+
+    /**
+     * Save game state to JSON
+     */
+    saveState() {
+        return JSON.stringify({
+            ...this.getStateSummary(),
+            territories: Array.from(this.territories.entries()),
+            turnHistory: this.turnHistory,
+            gameEvents: this.gameEvents
+        });
+    }
+
+    /**
+     * Load game state from JSON
+     */
+    loadState(jsonState) {
+        try {
+            const state = JSON.parse(jsonState);
+            
+            this.currentTurn = state.turn;
+            this.currentPlayer = state.player;
+            this.currentPhase = state.phase;
+            this.gameStatus = state.status;
+            this.resources = state.resources;
+            this.victoryProgress = state.victoryProgress;
+            this.turnHistory = state.turnHistory || [];
+            this.gameEvents = state.gameEvents || [];
+            
+            // Restore territories
+            this.territories.clear();
+            if (state.territories) {
+                state.territories.forEach(([id, territory]) => {
+                    this.territories.set(id, territory);
                 });
             }
-        });
-        
-        // Add production to player resources
-        Object.keys(production).forEach(player => {
-            Object.keys(production[player]).forEach(resourceType => {
-                _state.players[player].resources[resourceType] += production[player][resourceType];
-            });
-        });
-        
-        // Notify subscribers
-        emit('resourcesChanged', {
-            playerResources: _state.players[CONSTANTS.PLAYERS.PLAYER].resources,
-            aiResources: _state.players[CONSTANTS.PLAYERS.AI].resources,
-            production: production
-        });
-    }
-    
-    /**
-     * Check if any victory conditions are met
-     * 
-     * @returns {object|null} - Victory data if condition met, null otherwise
-     */
-    function checkVictoryConditions() {
-        // Calculate territorial control
-        let playerTerritories = 0;
-        let aiTerritories = 0;
-        let totalTerritories = 0;
-        
-        _state.territories.forEach(territory => {
-            totalTerritories++;
-            if (territory.owner === CONSTANTS.PLAYERS.PLAYER) {
-                playerTerritories++;
-            } else if (territory.owner === CONSTANTS.PLAYERS.AI) {
-                aiTerritories++;
-            }
-        });
-        
-        const playerTerritorialPercent = playerTerritories / totalTerritories;
-        const aiTerritorialPercent = aiTerritories / totalTerritories;
-        
-        _state.victoryProgress.territorial = playerTerritorialPercent;
-        
-        // Check for territorial victory
-        if (playerTerritorialPercent >= CONSTANTS.VICTORY.TERRITORIAL_THRESHOLD) {
-            return {
-                victor: CONSTANTS.PLAYERS.PLAYER,
-                type: "territorial"
-            };
-        }
-        
-        if (aiTerritorialPercent >= CONSTANTS.VICTORY.TERRITORIAL_THRESHOLD) {
-            return {
-                victor: CONSTANTS.PLAYERS.AI,
-                type: "territorial"
-            };
-        }
-        
-        // Check for economic victory
-        const playerResources = _state.players[CONSTANTS.PLAYERS.PLAYER].resources;
-        const aiResources = _state.players[CONSTANTS.PLAYERS.AI].resources;
-        
-        const playerEconomicVictory = Object.values(playerResources).every(
-            value => value >= CONSTANTS.VICTORY.ECONOMIC_THRESHOLD
-        );
-        
-        const aiEconomicVictory = Object.values(aiResources).every(
-            value => value >= CONSTANTS.VICTORY.ECONOMIC_THRESHOLD
-        );
-        
-        _state.victoryProgress.economic = playerEconomicVictory;
-        
-        if (playerEconomicVictory) {
-            return {
-                victor: CONSTANTS.PLAYERS.PLAYER,
-                type: "economic"
-            };
-        }
-        
-        if (aiEconomicVictory) {
-            return {
-                victor: CONSTANTS.PLAYERS.AI,
-                type: "economic"
-            };
-        }
-        
-        // Check for influence victory (strategic points)
-        let playerStrategicPoints = 0;
-        let aiStrategicPoints = 0;
-        let totalStrategicPoints = 0;
-        
-        _state.territories.forEach(territory => {
-            if (territory.territoryType === CONSTANTS.TERRITORY_TYPES.STRATEGIC_POINT) {
-                totalStrategicPoints++;
-                if (territory.owner === CONSTANTS.PLAYERS.PLAYER) {
-                    playerStrategicPoints++;
-                } else if (territory.owner === CONSTANTS.PLAYERS.AI) {
-                    aiStrategicPoints++;
-                }
-            }
-        });
-        
-        // If player controls all strategic points, increment counter
-        if (playerStrategicPoints === totalStrategicPoints && totalStrategicPoints > 0) {
-            _state.victoryProgress.influence++;
             
-            // Check if player has controlled strategic points for enough turns
-            if (_state.victoryProgress.influence >= CONSTANTS.VICTORY.INFLUENCE_TURNS) {
-                return {
-                    victor: CONSTANTS.PLAYERS.PLAYER,
-                    type: "influence"
-                };
-            }
-        } else {
-            // Reset counter if player loses control
-            _state.victoryProgress.influence = 0;
+            this.updateStatistics();
+            this.emit('gameStateChanged', this.getStateSummary());
+            
+            console.log('📥 Game state loaded successfully');
+            return true;
+        } catch (error) {
+            console.error('❌ Failed to load game state:', error);
+            return false;
         }
-        
-        // If AI controls all strategic points, they win
-        if (aiStrategicPoints === totalStrategicPoints && totalStrategicPoints > 0) {
-            return {
-                victor: CONSTANTS.PLAYERS.AI,
-                type: "influence"
-            };
-        }
-        
-        // No victory condition met
-        return null;
     }
-    
-    /**
-     * Get the current game state
-     * 
-     * @returns {object} - Copy of game state
-     */
-    function getState() {
-        return { ..._state };
-    }
-    
-    /**
-     * Get the current turn number
-     * 
-     * @returns {number} - Turn number
-     */
-    function getCurrentTurn() {
-        return _state.currentTurn;
-    }
-    
-    /**
-     * Get the active player
-     * 
-     * @returns {string} - Active player ID
-     */
-    function getActivePlayer() {
-        return _state.activePlayer;
-    }
-    
-    /**
-     * Get the player resources
-     * 
-     * @param {string} player - Player ID
-     * @returns {object} - Player resources
-     */
-    function getResources(player) {
-        return { ..._state.players[player].resources };
-    }
-    
-    /**
-     * Get the selected territory
-     * 
-     * @returns {object|null} - Selected territory or null
-     */
-    function getSelectedTerritory() {
-        if (!_state.selectedTerritory) {
-            return null;
-        }
-        return _state.territories.get(_state.selectedTerritory);
-    }
-    
-    // Public API
-    return {
-        initialize,
-        endTurn,
-        selectTerritory,
-        clearSelection,
-        getState,
-        getCurrentTurn,
-        getActivePlayer,
-        getResources,
-        getSelectedTerritory,
-        subscribe,
-        emit
-    };
-})();
+}

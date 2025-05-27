@@ -20,12 +20,6 @@ Colony Conquest is a turn-based strategy game centered around hexagonal grid-bas
 - Used for claiming territories, influencing neighbors, and recruiting units
 - Each territory produces its resource type based on its value
 
-### Influence Web
-- Each territory exerts influence on neighboring territories
-- Influence determines territory ownership
-- When influences meet, creates dynamic diplomatic effects
-- Creates neutral zones and contested borders
-
 ### Territory Types
 - Resource Node: Specialized in single resource production
 - Mixed Zone: Produces two different resources

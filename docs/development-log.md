@@ -5,19 +5,7 @@
 ### Foundation and Core Systems Setup
 
 #### Completed Tasks:
-- Created project directory structure
-- Set up HTML5 Canvas foundation
-- Implemented hexagonal grid mathematics
-- Created territory data structures and visualization
-- Set up game state management
-- Implemented resource system
-- Added basic UI components
-- Created input handling for territory selection
-- Connected to GitHub repository
-- Set up development server
-- Created favicon and manifest for web installation
-- Fixed rendering issues and cleaned up codebase
-- Added game documentation and setup instructions
+
 
 #### Technical Details:
 - Implemented pointy-top hex grid with proper coordinate conversion
@@ -30,6 +18,20 @@
 - Enhanced server to support custom port configuration
 
 #### Next Steps:
+- Create project directory structure
+- Set up HTML5 Canvas foundation
+- Implemente hexagonal grid
+- Create territory data structures and visualization
+- Set up game state management
+- Implemente resource system
+- Add basic UI components
+- Create input handling for territory selection
+- Connect to GitHub repository
+- Create favicon and manifest for web installation
+- Fix rendering issues and cleaned up codebase
+- Added game documentation and setup instructions
+- Implement resource gathering
+- Implement turn structure
 - Implement AI opponent decision making
 - Add unit placement and movement system
 - Enhance territory influence mechanics

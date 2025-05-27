@@ -1,203 +1,447 @@
 /**
- * HexGrid module for managing the hexagonal map
- * Handles operations on the entire grid structure
+ * Colony Conquest - Hexagonal Grid System
+ * Advanced hexagonal grid mathematics and layout management
  */
 
-const HexGrid = (function() {
-    // Private variables
-    let _width = 0;
-    let _height = 0;
-    let _hexRadius = 0;
-    let _hexes = new Map();
-    let _centerX = 0;
-    let _centerY = 0;
-    
-    /**
-     * Initialize the hex grid with specific dimensions
-     * 
-     * @param {number} width - Number of columns in the grid
-     * @param {number} height - Number of rows in the grid
-     * @param {number} hexRadius - Radius of each hexagon in pixels
-     */
-    function initialize(width, height, hexRadius) {
-        _width = width;
-        _height = height;
-        _hexRadius = hexRadius;
-        _hexes.clear();
+import { 
+    hex, 
+    hexAdd, 
+    hexSubtract, 
+    hexDistance, 
+    hexNeighbor, 
+    hexNeighbors, 
+    hexToPixel, 
+    pixelToHex, 
+    hexRound, 
+    hexCorners 
+} from '../utils/math-utils.js';
+import { HEX_CONSTANTS, GAME_CONFIG } from '../utils/constants.js';
+
+/**
+ * HexGrid class - Manages hexagonal grid layout and operations
+ */
+export class HexGrid {
+    constructor(size = GAME_CONFIG.GRID_SIZE, hexSize = GAME_CONFIG.HEX_SIZE) {
+        this.size = size;
+        this.hexSize = hexSize;
+        this.hexes = new Map(); // Maps hex coordinate string to hex data
+        this.layout = this.createLayout();
+        this.center = { x: 0, y: 0 }; // Will be set when rendered
         
-        // Calculate grid center for positioning
-        const gridWidthPx = Math.sqrt(3) * hexRadius * width;
-        const gridHeightPx = 1.5 * hexRadius * height;
+        this.generateGrid();
+        console.log(`🗺️ HexGrid created: ${size}x${size}, ${this.hexes.size} hexes`);
+    }
+
+    /**
+     * Create hex layout configuration
+     */
+    createLayout() {
+        return {
+            orientation: HEX_CONSTANTS.ORIENTATION,
+            size: { x: this.hexSize, y: this.hexSize },
+            origin: { x: 0, y: 0 }
+        };
+    }
+
+    /**
+     * Generate the hexagonal grid
+     */
+    generateGrid() {
+        const radius = Math.floor(this.size / 2);
         
-        // Center and offset to account for pointy-top hex grid layout
-        _centerX = gridWidthPx / 2;
-        _centerY = gridHeightPx / 2;
-    }
-    
-    /**
-     * Add a hex to the grid
-     * 
-     * @param {string} id - Unique hex identifier
-     * @param {object} hexData - Hex territory data
-     */
-    function addHex(id, hexData) {
-        _hexes.set(id, hexData);
-    }
-    
-    /**
-     * Get a hex by its ID
-     * 
-     * @param {string} id - Hex identifier
-     * @returns {object|undefined} - The hex data or undefined if not found
-     */
-    function getHex(id) {
-        return _hexes.get(id);
-    }
-    
-    /**
-     * Get a hex by its coordinates
-     * 
-     * @param {number} q - Q coordinate
-     * @param {number} r - R coordinate
-     * @returns {object|undefined} - The hex data or undefined if not found
-     */
-    function getHexByCoord(q, r) {
-        const id = MathUtils.hexToId(q, r);
-        return _hexes.get(id);
-    }
-    
-    /**
-     * Get all hexes in the grid
-     * 
-     * @returns {Map} - Map of all hexes
-     */
-    function getAllHexes() {
-        return _hexes;
-    }
-    
-    /**
-     * Check if coordinates are within the grid bounds
-     * 
-     * @param {number} q - Q coordinate
-     * @param {number} r - R coordinate
-     * @returns {boolean} - True if within bounds
-     */
-    function isInBounds(q, r) {
-        return MathUtils.isHexInBounds(q, r, _width, _height);
-    }
-    
-    /**
-     * Get neighboring hexes for a given hex
-     * 
-     * @param {string} id - Hex identifier
-     * @returns {Array} - Array of neighboring hex data
-     */
-    function getNeighbors(id) {
-        const hex = _hexes.get(id);
-        if (!hex) return [];
+        for (let q = -radius; q <= radius; q++) {
+            const r1 = Math.max(-radius, -q - radius);
+            const r2 = Math.min(radius, -q + radius);
+            
+            for (let r = r1; r <= r2; r++) {
+                const hexCoord = hex(q, r);
+                const hexKey = this.coordToKey(hexCoord);
+                
+                this.hexes.set(hexKey, {
+                    coord: hexCoord,
+                    key: hexKey,
+                    neighbors: [],
+                    pixelPos: null,
+                    corners: null
+                });
+            }
+        }
         
-        const neighbors = [];
-        const {q, r} = hex.coordinates;
+        // Calculate neighbors for each hex
+        this.calculateNeighbors();
+    }
+
+    /**
+     * Calculate neighbors for all hexes
+     */
+    calculateNeighbors() {
+        this.hexes.forEach((hexData, key) => {
+            const neighbors = hexNeighbors(hexData.coord);
+            hexData.neighbors = neighbors
+                .map(neighborCoord => this.coordToKey(neighborCoord))
+                .filter(neighborKey => this.hexes.has(neighborKey));
+        });
+    }
+
+    /**
+     * Convert hex coordinate to string key
+     */
+    coordToKey(hexCoord) {
+        return `${hexCoord.q},${hexCoord.r}`;
+    }
+
+    /**
+     * Convert string key to hex coordinate
+     */
+    keyToCoord(key) {
+        const [q, r] = key.split(',').map(Number);
+        return hex(q, r);
+    }
+
+    /**
+     * Set the center position for pixel coordinate calculations
+     */
+    setCenter(x, y) {
+        this.center = { x, y };
+        this.layout.origin = { x, y };
+        this.updatePixelPositions();
+    }
+
+    /**
+     * Update pixel positions for all hexes
+     */
+    updatePixelPositions() {
+        this.hexes.forEach(hexData => {
+            hexData.pixelPos = hexToPixel(hexData.coord, this.hexSize, this.center);
+            hexData.corners = hexCorners(hexData.pixelPos, this.hexSize);
+        });
+    }
+
+    /**
+     * Get hex data by coordinate
+     */
+    getHex(q, r) {
+        const key = this.coordToKey(hex(q, r));
+        return this.hexes.get(key);
+    }
+
+    /**
+     * Get hex data by key
+     */
+    getHexByKey(key) {
+        return this.hexes.get(key);
+    }
+
+    /**
+     * Get hex at pixel position
+     */
+    getHexAtPixel(x, y) {
+        const hexCoord = pixelToHex({ x, y }, this.hexSize, this.center);
+        const key = this.coordToKey(hexCoord);
+        return this.hexes.get(key);
+    }
+
+    /**
+     * Get all hexes within a certain distance from a center hex
+     */
+    getHexesInRange(centerQ, centerR, range) {
+        const centerCoord = hex(centerQ, centerR);
+        const results = [];
         
-        // Get all possible neighbors
-        const possibleNeighbors = MathUtils.getHexNeighbors(q, r);
-        
-        // Filter for valid neighbors within bounds
-        for (const neighbor of possibleNeighbors) {
-            if (isInBounds(neighbor.q, neighbor.r)) {
-                const neighborId = MathUtils.hexToId(neighbor.q, neighbor.r);
-                const neighborHex = _hexes.get(neighborId);
-                if (neighborHex) {
-                    neighbors.push(neighborHex);
+        for (let q = -range; q <= range; q++) {
+            const r1 = Math.max(-range, -q - range);
+            const r2 = Math.min(range, -q + range);
+            
+            for (let r = r1; r <= r2; r++) {
+                const hexCoord = hexAdd(centerCoord, hex(q, r));
+                const hexData = this.getHex(hexCoord.q, hexCoord.r);
+                
+                if (hexData) {
+                    results.push(hexData);
                 }
             }
         }
         
-        return neighbors;
+        return results;
     }
-    
+
     /**
-     * Convert screen coordinates to hex coordinates
-     * 
-     * @param {number} x - Screen x coordinate
-     * @param {number} y - Screen y coordinate
-     * @param {object} canvasOffset - Canvas position offset
-     * @returns {object|null} - Hex at coordinates or null if not found
+     * Get hexes in a ring around a center hex
      */
-    function screenToHex(x, y, canvasOffset) {
-        // Adjust for canvas position and center offset
-        const adjustedX = x - canvasOffset.x - _centerX;
-        const adjustedY = y - canvasOffset.y - _centerY;
-        
-        // Convert to hex coordinates
-        const hexCoord = MathUtils.pixelToHex(adjustedX, adjustedY, _hexRadius);
-        const roundedHex = MathUtils.hexRound(hexCoord.q, hexCoord.r);
-        
-        // Adjust for grid center
-        const gridQ = Math.floor(_width / 2) + roundedHex.q;
-        const gridR = Math.floor(_height / 2) + roundedHex.r;
-        
-        // Check if within bounds
-        if (isInBounds(gridQ, gridR)) {
-            return getHexByCoord(gridQ, gridR);
+    getHexRing(centerQ, centerR, radius) {
+        if (radius === 0) {
+            return [this.getHex(centerQ, centerR)].filter(Boolean);
         }
         
-        return null;
+        const results = [];
+        const centerCoord = hex(centerQ, centerR);
+        
+        // Start at one edge of the ring
+        let hexCoord = hexAdd(centerCoord, hex(-radius, 0));
+        
+        // Walk around the ring
+        for (let direction = 0; direction < 6; direction++) {
+            for (let step = 0; step < radius; step++) {
+                const hexData = this.getHex(hexCoord.q, hexCoord.r);
+                if (hexData) {
+                    results.push(hexData);
+                }
+                hexCoord = hexNeighbor(hexCoord, direction);
+            }
+        }
+        
+        return results;
     }
-    
+
     /**
-     * Get pixel coordinates for rendering a hex
-     * 
-     * @param {number} q - Q coordinate
-     * @param {number} r - R coordinate
-     * @returns {object} - {x, y} pixel coordinates
+     * Get neighbors of a hex
      */
-    function getHexCenter(q, r) {
-        // Adjust for grid center
-        const adjustedQ = q - Math.floor(_width / 2);
-        const adjustedR = r - Math.floor(_height / 2);
+    getNeighbors(q, r) {
+        const hexData = this.getHex(q, r);
+        if (!hexData) return [];
         
-        const pixel = MathUtils.hexToPixel(adjustedQ, adjustedR, _hexRadius);
+        return hexData.neighbors
+            .map(neighborKey => this.hexes.get(neighborKey))
+            .filter(Boolean);
+    }
+
+    /**
+     * Find path between two hexes using A* algorithm
+     */
+    findPath(startQ, startR, endQ, endR) {
+        const start = this.getHex(startQ, startR);
+        const end = this.getHex(endQ, endR);
         
-        // Add center offset
+        if (!start || !end) return [];
+        
+        const openSet = new Set([start.key]);
+        const cameFrom = new Map();
+        const gScore = new Map();
+        const fScore = new Map();
+        
+        gScore.set(start.key, 0);
+        fScore.set(start.key, hexDistance(start.coord, end.coord));
+        
+        while (openSet.size > 0) {
+            // Find node with lowest fScore
+            let current = null;
+            let lowestF = Infinity;
+            
+            for (const key of openSet) {
+                const f = fScore.get(key) || Infinity;
+                if (f < lowestF) {
+                    lowestF = f;
+                    current = this.hexes.get(key);
+                }
+            }
+            
+            if (!current) break;
+            
+            // Reached goal
+            if (current.key === end.key) {
+                return this.reconstructPath(cameFrom, current);
+            }
+            
+            openSet.delete(current.key);
+            
+            // Check neighbors
+            for (const neighborKey of current.neighbors) {
+                const neighbor = this.hexes.get(neighborKey);
+                if (!neighbor) continue;
+                
+                const tentativeG = (gScore.get(current.key) || 0) + 1;
+                
+                if (tentativeG < (gScore.get(neighbor.key) || Infinity)) {
+                    cameFrom.set(neighbor.key, current.key);
+                    gScore.set(neighbor.key, tentativeG);
+                    fScore.set(neighbor.key, tentativeG + hexDistance(neighbor.coord, end.coord));
+                    
+                    if (!openSet.has(neighbor.key)) {
+                        openSet.add(neighbor.key);
+                    }
+                }
+            }
+        }
+        
+        return []; // No path found
+    }
+
+    /**
+     * Reconstruct path from A* algorithm
+     */
+    reconstructPath(cameFrom, current) {
+        const path = [current];
+        
+        while (cameFrom.has(current.key)) {
+            current = this.hexes.get(cameFrom.get(current.key));
+            path.unshift(current);
+        }
+        
+        return path;
+    }
+
+    /**
+     * Get distance between two hexes
+     */
+    getDistance(q1, r1, q2, r2) {
+        return hexDistance(hex(q1, r1), hex(q2, r2));
+    }
+
+    /**
+     * Check if hex coordinates are valid (within grid bounds)
+     */
+    isValidHex(q, r) {
+        return this.hexes.has(this.coordToKey(hex(q, r)));
+    }
+
+    /**
+     * Get all hexes as an array
+     */
+    getAllHexes() {
+        return Array.from(this.hexes.values());
+    }
+
+    /**
+     * Get grid bounds
+     */
+    getBounds() {
+        let minQ = Infinity, maxQ = -Infinity;
+        let minR = Infinity, maxR = -Infinity;
+        
+        this.hexes.forEach(hexData => {
+            const { q, r } = hexData.coord;
+            minQ = Math.min(minQ, q);
+            maxQ = Math.max(maxQ, q);
+            minR = Math.min(minR, r);
+            maxR = Math.max(maxR, r);
+        });
+        
+        return { minQ, maxQ, minR, maxR };
+    }
+
+    /**
+     * Get pixel bounds for the entire grid
+     */
+    getPixelBounds() {
+        if (this.hexes.size === 0) return null;
+        
+        let minX = Infinity, maxX = -Infinity;
+        let minY = Infinity, maxY = -Infinity;
+        
+        this.hexes.forEach(hexData => {
+            if (hexData.corners) {
+                hexData.corners.forEach(corner => {
+                    minX = Math.min(minX, corner.x);
+                    maxX = Math.max(maxX, corner.x);
+                    minY = Math.min(minY, corner.y);
+                    maxY = Math.max(maxY, corner.y);
+                });
+            }
+        });
+        
+        return { minX, maxX, minY, maxY, width: maxX - minX, height: maxY - minY };
+    }
+
+    /**
+     * Check if a point is inside a hex
+     */
+    isPointInHex(x, y, hexData) {
+        if (!hexData || !hexData.corners) return false;
+        
+        // Use ray casting algorithm
+        const corners = hexData.corners;
+        let inside = false;
+        
+        for (let i = 0, j = corners.length - 1; i < corners.length; j = i++) {
+            if (((corners[i].y > y) !== (corners[j].y > y)) &&
+                (x < (corners[j].x - corners[i].x) * (y - corners[i].y) / (corners[j].y - corners[i].y) + corners[i].x)) {
+                inside = !inside;
+            }
+        }
+        
+        return inside;
+    }
+
+    /**
+     * Get hex layout information for rendering
+     */
+    getLayoutInfo() {
         return {
-            x: pixel.x + _centerX,
-            y: pixel.y + _centerY
+            layout: this.layout,
+            size: this.size,
+            hexSize: this.hexSize,
+            center: this.center,
+            hexCount: this.hexes.size,
+            bounds: this.getBounds(),
+            pixelBounds: this.getPixelBounds()
         };
     }
-    
+
     /**
-     * Clear all hexes from the grid
+     * Convert the grid to JSON for saving
      */
-    function clearGrid() {
-        _hexes.clear();
-    }
-    
-    /**
-     * Get the dimensions of the grid
-     */
-    function getDimensions() {
+    toJSON() {
         return {
-            width: _width,
-            height: _height,
-            hexRadius: _hexRadius,
-            pixelWidth: Math.sqrt(3) * _hexRadius * _width,
-            pixelHeight: 1.5 * _hexRadius * _height
+            size: this.size,
+            hexSize: this.hexSize,
+            center: this.center,
+            hexes: Array.from(this.hexes.entries())
         };
     }
-    
-    // Public API
-    return {
-        initialize,
-        addHex,
-        getHex,
-        getHexByCoord,
-        getAllHexes,
-        isInBounds,
-        getNeighbors,
-        screenToHex,
-        getHexCenter,
-        clearGrid,
-        getDimensions
-    };
-})();
+
+    /**
+     * Load grid from JSON
+     */
+    fromJSON(data) {
+        this.size = data.size;
+        this.hexSize = data.hexSize;
+        this.center = data.center;
+        this.layout = this.createLayout();
+        this.layout.origin = this.center;
+        
+        this.hexes.clear();
+        data.hexes.forEach(([key, hexData]) => {
+            this.hexes.set(key, hexData);
+        });
+        
+        console.log(`📥 HexGrid loaded from JSON: ${this.hexes.size} hexes`);
+    }
+
+    /**
+     * Create spiral iterator for traversing hexes in spiral order
+     */
+    spiralIterator(centerQ = 0, centerR = 0) {
+        const results = [];
+        const center = this.getHex(centerQ, centerR);
+        
+        if (center) {
+            results.push(center);
+            
+            for (let radius = 1; radius <= Math.floor(this.size / 2); radius++) {
+                const ring = this.getHexRing(centerQ, centerR, radius);
+                results.push(...ring);
+            }
+        }
+        
+        return results;
+    }
+
+    /**
+     * Get statistics about the grid
+     */
+    getStatistics() {
+        const bounds = this.getBounds();
+        const pixelBounds = this.getPixelBounds();
+        
+        return {
+            totalHexes: this.hexes.size,
+            gridSize: this.size,
+            hexSize: this.hexSize,
+            coordinateBounds: bounds,
+            pixelBounds: pixelBounds,
+            center: this.center,
+            averageNeighbors: Array.from(this.hexes.values())
+                .reduce((sum, hex) => sum + hex.neighbors.length, 0) / this.hexes.size
+        };
+    }
+}

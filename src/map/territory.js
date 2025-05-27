@@ -1,218 +1,267 @@
 /**
- * Territory class for representing individual hexagonal territories
+ * Territory Data Structure
+ * Manages individual hexagonal territory properties and state
  */
 
-class Territory {
-    /**
-     * Create a new Territory
-     * 
-     * @param {string} id - Unique identifier for the territory
-     * @param {number} q - Q coordinate in hex grid
-     * @param {number} r - R coordinate in hex grid
-     * @param {string} resourceType - Primary resource type
-     * @param {number} resourceValue - Primary resource production value
-     * @param {string} territoryType - Type of territory
-     */
-    constructor(id, q, r, resourceType, resourceValue, territoryType) {
-        this.id = id;
-        this.coordinates = { q, r };
-        this.owner = CONSTANTS.PLAYERS.NEUTRAL;
-        this.resourceType = resourceType;
-        this.resourceValue = resourceValue;
-        this.secondaryResource = null;
-        this.secondaryValue = 0;
-        this.influence = {
-            [CONSTANTS.PLAYERS.PLAYER]: 0,
-            [CONSTANTS.PLAYERS.AI]: 0,
-            [CONSTANTS.PLAYERS.NEUTRAL]: 5
-        };
-        this.territoryType = territoryType || CONSTANTS.TERRITORY_TYPES.RESOURCE_NODE;
-        this.units = [];
-        this.isContested = false;
-        this.lastCaptured = null;
-        this.selected = false;
+import { CONSTANTS } from '../utils/constants.js';
+
+export class Territory {
+    constructor(q, r, s = null) {
+        // Hex coordinates (cube coordinates)
+        this.q = q;
+        this.r = r;
+        this.s = s !== null ? s : -q - r; // Auto-calculate s if not provided
+        
+        // Territory properties
+        this.owner = null; // null = neutral, 0+ = player ID
+        this.resourceType = this.generateResourceType();
+        this.resourceValue = this.generateResourceValue();
+        this.isHomeBase = false;
+        
+        // Visual state
+        this.isSelected = false;
+        this.isHighlighted = false;
+        this.isTargeted = false;
+        
+        // Gameplay state
+        this.structures = []; // Future: buildings, defenses, etc.
+        this.unitCount = 0; // Number of units stationed
+        this.fortificationLevel = 0; // Defense bonus
+        
+        // History tracking
+        this.turnClaimed = null;
+        this.previousOwner = null;
+        this.timesContested = 0;
     }
-    
+
     /**
-     * Add a secondary resource to the territory
-     * 
-     * @param {string} resourceType - Secondary resource type
-     * @param {number} resourceValue - Secondary resource production value
+     * Generate a random resource type for this territory
+     * @returns {string} Resource type
      */
-    addSecondaryResource(resourceType, resourceValue) {
-        this.secondaryResource = resourceType;
-        this.secondaryValue = resourceValue;
-    }
-      /**
-     * Update the territory owner based on influence
-     * 
-     * @returns {boolean} - Whether ownership changed
-     */
-    updateOwnership() {
-        // Determine owner based on highest influence
-        let maxInfluence = this.influence[CONSTANTS.PLAYERS.NEUTRAL];
-        let maxOwner = CONSTANTS.PLAYERS.NEUTRAL;
-        
-        if (this.influence[CONSTANTS.PLAYERS.PLAYER] > maxInfluence) {
-            maxInfluence = this.influence[CONSTANTS.PLAYERS.PLAYER];
-            maxOwner = CONSTANTS.PLAYERS.PLAYER;
-        }
-        
-        if (this.influence[CONSTANTS.PLAYERS.AI] > maxInfluence) {
-            maxInfluence = this.influence[CONSTANTS.PLAYERS.AI];
-            maxOwner = CONSTANTS.PLAYERS.AI;
-        }
-        
-        // Check if the territory is contested
-        const playerInfluence = this.influence[CONSTANTS.PLAYERS.PLAYER];
-        const aiInfluence = this.influence[CONSTANTS.PLAYERS.AI];
-        const neutralInfluence = this.influence[CONSTANTS.PLAYERS.NEUTRAL];
-        
-        // Territory is contested if two or more factions have equal highest influence
-        const isPlayerContesting = playerInfluence === maxInfluence && maxInfluence > 0;
-        const isAIContesting = aiInfluence === maxInfluence && maxInfluence > 0;
-        const isNeutralContesting = neutralInfluence === maxInfluence && maxInfluence > 0;
-        
-        this.isContested = (isPlayerContesting && isAIContesting) || 
-                           (isPlayerContesting && isNeutralContesting) || 
-                           (isAIContesting && isNeutralContesting);
-        
-        // Check if ownership changed
-        const ownershipChanged = this.owner !== maxOwner;
-        
-        // Update owner if changed
-        if (ownershipChanged) {
-            this.owner = maxOwner;
-            // Using a safer way to track the turn number
-            this.lastCaptured = window.GameState ? GameState.getCurrentTurn() : 1;
-        }
-        
-        return ownershipChanged;
-    }
-    
-    /**
-     * Add influence from a player to this territory
-     * 
-     * @param {string} player - Player identifier
-     * @param {number} amount - Amount of influence to add
-     */
-    addInfluence(player, amount) {
-        this.influence[player] += amount;
-        
-        // Ensure influence is not negative
-        if (this.influence[player] < 0) {
-            this.influence[player] = 0;
-        }
-    }
-    
-    /**
-     * Get the total production of this territory based on owner
-     * 
-     * @returns {object} - Resource production map
-     */
-    getProduction() {
-        const production = {
-            [CONSTANTS.RESOURCE_TYPES.GOLD]: 0,
-            [CONSTANTS.RESOURCE_TYPES.TIMBER]: 0,
-            [CONSTANTS.RESOURCE_TYPES.IRON]: 0,
-            [CONSTANTS.RESOURCE_TYPES.FOOD]: 0
+    generateResourceType() {
+        const types = Object.keys(CONSTANTS.RESOURCES);
+        const weights = {
+            'food': 30,
+            'wood': 25,
+            'stone': 20,
+            'iron': 15,
+            'gold': 10
         };
         
-        // Only produce if territory is owned by a player
-        if (this.owner !== CONSTANTS.PLAYERS.NEUTRAL) {
-            production[this.resourceType] += this.resourceValue;
-            
-            if (this.secondaryResource) {
-                production[this.secondaryResource] += this.secondaryValue;
+        const random = Math.random() * 100;
+        let cumulative = 0;
+        
+        for (const [type, weight] of Object.entries(weights)) {
+            cumulative += weight;
+            if (random <= cumulative) {
+                return type;
             }
         }
         
-        return production;
+        return 'food'; // Fallback
     }
-    
+
     /**
-     * Get color for rendering this territory
-     * 
-     * @returns {string} - CSS color code
+     * Generate resource value based on type
+     * @returns {number} Resource production value
      */
-    getColor() {
-        // Base color determined by resource type
-        let baseColor;
-        switch (this.resourceType) {
-            case CONSTANTS.RESOURCE_TYPES.GOLD:
-                baseColor = CONSTANTS.COLORS.GOLD;
-                break;
-            case CONSTANTS.RESOURCE_TYPES.TIMBER:
-                baseColor = CONSTANTS.COLORS.TIMBER;
-                break;
-            case CONSTANTS.RESOURCE_TYPES.IRON:
-                baseColor = CONSTANTS.COLORS.IRON;
-                break;
-            case CONSTANTS.RESOURCE_TYPES.FOOD:
-                baseColor = CONSTANTS.COLORS.FOOD;
-                break;
-            default:
-                baseColor = CONSTANTS.COLORS.NEUTRAL;
+    generateResourceValue() {
+        const baseValues = {
+            'food': { min: 2, max: 5 },
+            'wood': { min: 2, max: 4 },
+            'stone': { min: 1, max: 3 },
+            'iron': { min: 1, max: 2 },
+            'gold': { min: 1, max: 2 }
+        };
+        
+        const range = baseValues[this.resourceType] || { min: 1, max: 3 };
+        return Math.floor(Math.random() * (range.max - range.min + 1)) + range.min;
+    }
+
+    /**
+     * Change territory ownership
+     * @param {number|null} newOwner - Player ID or null for neutral
+     * @param {number} turnNumber - Current turn number
+     */
+    changeOwnership(newOwner, turnNumber) {
+        if (this.owner !== newOwner) {
+            this.previousOwner = this.owner;
+            this.owner = newOwner;
+            this.turnClaimed = turnNumber;
+            this.timesContested++;
+            
+            // Reset visual states
+            this.isSelected = false;
+            this.isHighlighted = false;
+            this.isTargeted = false;
+        }
+    }
+
+    /**
+     * Check if territory is neutral (unowned)
+     * @returns {boolean}
+     */
+    isNeutral() {
+        return this.owner === null;
+    }
+
+    /**
+     * Check if territory is owned by a specific player
+     * @param {number} playerId - Player ID to check
+     * @returns {boolean}
+     */
+    isOwnedBy(playerId) {
+        return this.owner === playerId;
+    }
+
+    /**
+     * Get territory claim cost based on current state
+     * @returns {object} Resource costs
+     */
+    getClaimCost() {
+        let baseCost = CONSTANTS.CLAIMING.BASE_COST;
+        
+        // Increase cost if previously owned
+        if (this.timesContested > 0) {
+            baseCost *= (1 + (this.timesContested * 0.2));
         }
         
-        // Adjust color based on owner
-        if (this.owner === CONSTANTS.PLAYERS.PLAYER) {
-            return this.isContested ? `${CONSTANTS.COLORS.PLAYER}99` : CONSTANTS.COLORS.PLAYER;
-        } else if (this.owner === CONSTANTS.PLAYERS.AI) {
-            return this.isContested ? `${CONSTANTS.COLORS.AI}99` : CONSTANTS.COLORS.AI;
-        }
-        
-        // Use base resource color for neutral territories
-        return baseColor;
-    }
-    
-    /**
-     * Select this territory
-     * 
-     * @param {boolean} selected - Whether the territory is selected
-     */
-    setSelected(selected) {
-        this.selected = selected;
-    }
-    
-    /**
-     * Get a simplified representation for UI display
-     * 
-     * @returns {object} - Simplified territory data
-     */
-    getDisplayData() {
-        // Get the dominant influence
-        const playerInfluence = this.influence[CONSTANTS.PLAYERS.PLAYER];
-        const aiInfluence = this.influence[CONSTANTS.PLAYERS.AI];
-        const neutralInfluence = this.influence[CONSTANTS.PLAYERS.NEUTRAL];
-        
-        let dominantInfluence;
-        let dominantAmount;
-        
-        if (playerInfluence >= aiInfluence && playerInfluence >= neutralInfluence) {
-            dominantInfluence = "Player";
-            dominantAmount = playerInfluence;
-        } else if (aiInfluence >= playerInfluence && aiInfluence >= neutralInfluence) {
-            dominantInfluence = "AI";
-            dominantAmount = aiInfluence;
-        } else {
-            dominantInfluence = "Neutral";
-            dominantAmount = neutralInfluence;
-        }
+        // Increase cost based on resource value
+        baseCost *= (1 + (this.resourceValue * 0.1));
         
         return {
-            id: this.id,
-            coordinates: `(${this.coordinates.q}, ${this.coordinates.r})`,
-            owner: this.owner === CONSTANTS.PLAYERS.NEUTRAL ? 'None' : 
-                   this.owner === CONSTANTS.PLAYERS.PLAYER ? 'Player' : 'AI',
-            resourceType: this.resourceType.charAt(0).toUpperCase() + this.resourceType.slice(1),
-            resourceValue: this.resourceValue,
-            secondaryResource: this.secondaryResource ? 
-                              this.secondaryResource.charAt(0).toUpperCase() + this.secondaryResource.slice(1) : 'None',
-            secondaryValue: this.secondaryValue,
-            influence: `${dominantInfluence} (${dominantAmount})`,
-            isContested: this.isContested,
-            territoryType: this.territoryType.replace('_', ' ')
+            food: Math.floor(baseCost),
+            wood: Math.floor(baseCost * 0.5)
         };
+    }
+
+    /**
+     * Set this territory as a home base
+     * @param {number} playerId - Owner player ID
+     */
+    setAsHomeBase(playerId) {
+        this.owner = playerId;
+        this.isHomeBase = true;
+        this.fortificationLevel = 1;
+        this.resourceValue = Math.max(this.resourceValue, 2); // Minimum value for home base
+        this.turnClaimed = 0;
+    }
+
+    /**
+     * Get territory defense value
+     * @returns {number} Total defense value
+     */
+    getDefenseValue() {
+        let defense = this.fortificationLevel;
+        
+        // Home base bonus
+        if (this.isHomeBase) {
+            defense += 2;
+        }
+        
+        // Unit count bonus
+        defense += Math.floor(this.unitCount * 0.5);
+        
+        return defense;
+    }
+
+    /**
+     * Get visual state for rendering
+     * @returns {object} Visual properties
+     */
+    getVisualState() {
+        return {
+            q: this.q,
+            r: this.r,
+            s: this.s,
+            owner: this.owner,
+            resourceType: this.resourceType,
+            resourceValue: this.resourceValue,
+            isHomeBase: this.isHomeBase,
+            isSelected: this.isSelected,
+            isHighlighted: this.isHighlighted,
+            isTargeted: this.isTargeted,
+            fortificationLevel: this.fortificationLevel,
+            unitCount: this.unitCount
+        };
+    }
+
+    /**
+     * Update visual state
+     * @param {object} state - New visual state
+     */
+    updateVisualState(state) {
+        if (state.isSelected !== undefined) this.isSelected = state.isSelected;
+        if (state.isHighlighted !== undefined) this.isHighlighted = state.isHighlighted;
+        if (state.isTargeted !== undefined) this.isTargeted = state.isTargeted;
+    }
+
+    /**
+     * Reset all visual states
+     */
+    resetVisualState() {
+        this.isSelected = false;
+        this.isHighlighted = false;
+        this.isTargeted = false;
+    }
+
+    /**
+     * Get territory information for UI display
+     * @returns {object} Display information
+     */
+    getDisplayInfo() {
+        return {
+            coordinates: `(${this.q}, ${this.r})`,
+            owner: this.owner !== null ? `Player ${this.owner + 1}` : 'Neutral',
+            resource: `${this.resourceType} (${this.resourceValue})`,
+            defense: this.getDefenseValue(),
+            claimCost: this.getClaimCost(),
+            isHomeBase: this.isHomeBase,
+            contested: this.timesContested > 1
+        };
+    }
+
+    /**
+     * Serialize territory for save/load
+     * @returns {object} Serialized data
+     */
+    serialize() {
+        return {
+            q: this.q,
+            r: this.r,
+            s: this.s,
+            owner: this.owner,
+            resourceType: this.resourceType,
+            resourceValue: this.resourceValue,
+            isHomeBase: this.isHomeBase,
+            structures: this.structures,
+            unitCount: this.unitCount,
+            fortificationLevel: this.fortificationLevel,
+            turnClaimed: this.turnClaimed,
+            previousOwner: this.previousOwner,
+            timesContested: this.timesContested
+        };
+    }
+
+    /**
+     * Deserialize territory from save data
+     * @param {object} data - Serialized data
+     * @returns {Territory} Restored territory
+     */
+    static deserialize(data) {
+        const territory = new Territory(data.q, data.r, data.s);
+        
+        territory.owner = data.owner;
+        territory.resourceType = data.resourceType;
+        territory.resourceValue = data.resourceValue;
+        territory.isHomeBase = data.isHomeBase;
+        territory.structures = data.structures || [];
+        territory.unitCount = data.unitCount || 0;
+        territory.fortificationLevel = data.fortificationLevel || 0;
+        territory.turnClaimed = data.turnClaimed;
+        territory.previousOwner = data.previousOwner;
+        territory.timesContested = data.timesContested || 0;
+        
+        return territory;
     }
 }
