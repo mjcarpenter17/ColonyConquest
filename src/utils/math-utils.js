@@ -85,73 +85,51 @@ export function hexNeighbors(hexCoord) {
 }
 
 /**
- * Convert hex coordinates to pixel coordinates
- * @param {Object|number} hexCoordOrQ - Hex coordinate {q, r, s} or Q coordinate
- * @param {number} sizeOrR - Hex size (radius) or R coordinate if first param is Q
- * @param {Object|number} originOrSize - Origin point {x, y} or size if using Q,R params
- * @param {Object} origin - Origin point {x, y} (only used with Q,R,size params)
+ * Convert hex coordinates to pixel coordinates (pointy-top)
+ * @param {Object} hexCoord - Hex coordinate {q, r, s}
+ * @param {number} size - Hex size (radius)
  * @returns {Object} Pixel coordinates {x, y}
  */
-export function hexToPixel(hexCoordOrQ, sizeOrR, originOrSize = { x: 0, y: 0 }, origin = { x: 0, y: 0 }) {
-    let hexCoord, size, originPoint;
-    
-    // Handle different parameter patterns
-    if (typeof hexCoordOrQ === 'object') {
-        // Called with (hexCoord, size, origin)
-        hexCoord = hexCoordOrQ;
-        size = sizeOrR;
-        originPoint = originOrSize;
-    } else {
-        // Called with (q, r, size, origin) or (q, r, size)
-        hexCoord = { q: hexCoordOrQ, r: sizeOrR };
-        size = originOrSize;
-        originPoint = origin;
-    }
-    
-    const orientation = HEX_CONSTANTS.ORIENTATION;
-    const x = (orientation.f0 * hexCoord.q + orientation.f1 * hexCoord.r) * size;
-    const y = (orientation.f2 * hexCoord.q + orientation.f3 * hexCoord.r) * size;
-    return { x: x + originPoint.x, y: y + originPoint.y };
+export function hexToPixel(hexCoord, size) {
+    const x = size * (HEX_CONSTANTS.ORIENTATION.f0 * hexCoord.q + HEX_CONSTANTS.ORIENTATION.f1 * hexCoord.r);
+    const y = size * (HEX_CONSTANTS.ORIENTATION.f2 * hexCoord.q + HEX_CONSTANTS.ORIENTATION.f3 * hexCoord.r);
+    return { x: x, y: y };
 }
 
 /**
- * Convert pixel coordinates to hex coordinates
- * @param {Object} point - Pixel coordinates {x, y}
+ * Convert pixel coordinates to hex coordinates (pointy-top)
+ * @param {Object} point - Pixel coordinate {x, y}
  * @param {number} size - Hex size (radius)
- * @param {Object} origin - Origin point {x, y}
- * @returns {Object} Hex coordinate {q, r, s}
+ * @returns {Object} Fractional hex coordinate {q, r, s}
  */
-export function pixelToHex(point, size, origin = { x: 0, y: 0 }) {
-    const orientation = HEX_CONSTANTS.ORIENTATION;
-    const pt = { x: (point.x - origin.x) / size, y: (point.y - origin.y) / size };
-    const q = orientation.b0 * pt.x + orientation.b1 * pt.y;
-    const r = orientation.b2 * pt.x + orientation.b3 * pt.y;
-    return hexRound(hex(q, r));
+export function pixelToHex(point, size) {
+    const q = (HEX_CONSTANTS.ORIENTATION.b0 * point.x - HEX_CONSTANTS.ORIENTATION.b1 * point.y) / size;
+    const r = (HEX_CONSTANTS.ORIENTATION.b2 * point.x + HEX_CONSTANTS.ORIENTATION.b3 * point.y) / size;
+    return hexRound(hex(q, r)); // Round to nearest hex
 }
 
 /**
- * Round fractional hex coordinates to the nearest hex
- * @param {Object} hexCoord - Fractional hex coordinate
+ * Round fractional hex coordinates to the nearest integer hex coordinate
+ * @param {Object} fracHex - Fractional hex coordinate {q, r, s}
  * @returns {Object} Rounded hex coordinate
  */
-export function hexRound(hexCoord) {
-    let q = Math.round(hexCoord.q);
-    let r = Math.round(hexCoord.r);
-    let s = Math.round(hexCoord.s);
-    
-    const q_diff = Math.abs(q - hexCoord.q);
-    const r_diff = Math.abs(r - hexCoord.r);
-    const s_diff = Math.abs(s - hexCoord.s);
-    
-    if (q_diff > r_diff && q_diff > s_diff) {
+export function hexRound(fracHex) {
+    let q = Math.round(fracHex.q);
+    let r = Math.round(fracHex.r);
+    let s = Math.round(fracHex.s);
+
+    const qDiff = Math.abs(q - fracHex.q);
+    const rDiff = Math.abs(r - fracHex.r);
+    const sDiff = Math.abs(s - fracHex.s);
+
+    if (qDiff > rDiff && qDiff > sDiff) {
         q = -r - s;
-    } else if (r_diff > s_diff) {
+    } else if (rDiff > sDiff) {
         r = -q - s;
     } else {
         s = -q - r;
     }
-    
-    return { q: q, r: r, s: s };
+    return hex(q, r);
 }
 
 /**
@@ -300,4 +278,17 @@ export function shuffleArray(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
     return array;
+}
+
+/**
+ * Linear interpolation for hex coordinates
+ * @param {Object} a - Start hex coordinate
+ * @param {Object} b - End hex coordinate
+ * @param {number} t - Interpolation factor (0-1)
+ * @returns {Object} Interpolated hex coordinate
+ */
+export function hexLerp(a, b, t) {
+    const q = lerp(a.q, b.q, t);
+    const r = lerp(a.r, b.r, t);
+    return hex(q, r);
 }

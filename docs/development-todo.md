@@ -2,7 +2,7 @@
 
 **Project:** Hex-Grid Strategy Game using Phaser Framework  
 **Started:** May 27, 2025  
-**Status:** Core Systems Complete - Ready for Gameplay Mechanics
+**Status:** Core Systems InComplete -needs review
 
 ---
 

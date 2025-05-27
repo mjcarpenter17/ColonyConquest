@@ -80,16 +80,15 @@ export class MapGenerator {
      * Distribute resources across the map with strategic balance    */
     distributeResources() {
         const territories = Array.from(this.territories.values());
-        const resourceTypes = Object.values(RESOURCE_TYPES);
         
         // Calculate target distribution
         const totalTerritories = territories.length;
         const targetDistribution = {
-            'food': Math.ceil(totalTerritories * 0.35), // 35% food (most common)
-            'wood': Math.ceil(totalTerritories * 0.25), // 25% wood
-            'stone': Math.ceil(totalTerritories * 0.20), // 20% stone
-            'iron': Math.ceil(totalTerritories * 0.12),  // 12% iron
-            'gold': Math.ceil(totalTerritories * 0.08)   // 8% gold (rarest)
+            [RESOURCE_TYPES.FOOD]: Math.ceil(totalTerritories * 0.35), // 35% food (most common)
+            [RESOURCE_TYPES.WOOD]: Math.ceil(totalTerritories * 0.25), // 25% wood
+            [RESOURCE_TYPES.STONE]: Math.ceil(totalTerritories * 0.20), // 20% stone
+            [RESOURCE_TYPES.IRON]: Math.ceil(totalTerritories * 0.12),  // 12% iron
+            [RESOURCE_TYPES.GOLD]: Math.ceil(totalTerritories * 0.08)   // 8% gold (rarest)
         };
         
         // Assign resources based on target distribution

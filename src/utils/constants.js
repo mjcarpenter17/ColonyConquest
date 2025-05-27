@@ -130,6 +130,8 @@ export const COLORS = {
     // Hex Grid Colors
     HEX_BORDER: 0x34495e,                     // Dark hex borders
     HEX_BACKGROUND: 0x2c3e50,                 // Dark hex background
+    HEX_HIGHLIGHT: 0xf1c40f,    // Highlight color (yellow)
+    HEX_BORDER_SELECTED: 0xe67e22, // Border for selected hex (orange)
     
     // Player/AI Colors
     PLAYER: 0x3498db,                         // Blue for player

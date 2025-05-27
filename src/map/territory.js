@@ -39,13 +39,12 @@ export class Territory {
      * @returns {string} Resource type
      */
     generateResourceType() {
-        const types = Object.keys(CONSTANTS.RESOURCES);
         const weights = {
-            'food': 30,
-            'wood': 25,
-            'stone': 20,
-            'iron': 15,
-            'gold': 10
+            [CONSTANTS.RESOURCE_TYPES.FOOD]: 30,
+            [CONSTANTS.RESOURCE_TYPES.WOOD]: 25,
+            [CONSTANTS.RESOURCE_TYPES.STONE]: 20,
+            [CONSTANTS.RESOURCE_TYPES.IRON]: 15,
+            [CONSTANTS.RESOURCE_TYPES.GOLD]: 10
         };
         
         const random = Math.random() * 100;
@@ -67,11 +66,11 @@ export class Territory {
      */
     generateResourceValue() {
         const baseValues = {
-            'food': { min: 2, max: 5 },
-            'wood': { min: 2, max: 4 },
-            'stone': { min: 1, max: 3 },
-            'iron': { min: 1, max: 2 },
-            'gold': { min: 1, max: 2 }
+            [CONSTANTS.RESOURCE_TYPES.FOOD]: { min: 2, max: 5 },
+            [CONSTANTS.RESOURCE_TYPES.WOOD]: { min: 2, max: 4 },
+            [CONSTANTS.RESOURCE_TYPES.STONE]: { min: 1, max: 3 },
+            [CONSTANTS.RESOURCE_TYPES.IRON]: { min: 1, max: 2 },
+            [CONSTANTS.RESOURCE_TYPES.GOLD]: { min: 1, max: 2 }
         };
         
         const range = baseValues[this.resourceType] || { min: 1, max: 3 };

@@ -5,7 +5,7 @@
 
 import { HexGrid } from '../map/hex-grid.js';
 import { GAME_CONFIG, COLORS } from '../utils/constants.js'; // Added COLORS to the import
-import { hexToPixel } from '../utils/math-utils.js';
+import { hexToPixel, pixelToHex } from '../utils/math-utils.js';
 
 /**
  * GameScene class - Main gameplay scene for Phaser
@@ -75,6 +75,9 @@ export class GameScene extends Phaser.Scene {
         this.hexGrid = new HexGrid(GAME_CONFIG.GRID_SIZE); // Pass grid size if HexGrid constructor uses it
         this.hexGraphics = this.add.graphics();
         this.renderHexGrid();
+
+        // Setup input handling
+        this.input.on('pointerdown', this.handleTileClick, this);
         
         console.log('✅ GameScene created successfully');
     }
@@ -133,6 +136,52 @@ export class GameScene extends Phaser.Scene {
         graphics.closePath();
         graphics.fillPath();
         graphics.strokePath();
+    }
+
+    /**
+     * Handle tile click/touch input
+     * @param {Phaser.Input.Pointer} pointer 
+     */
+    handleTileClick(pointer) {
+        const hexSize = GAME_CONFIG.HEX_SIZE;
+        const origin = { x: this.cameras.main.width / 2, y: this.cameras.main.height / 2 };
+
+        // Convert pointer coordinates to world space relative to grid origin
+        const clickX = pointer.x - origin.x;
+        const clickY = pointer.y - origin.y;
+
+        // Convert pixel coordinates to hex coordinates (axial)
+        // This requires a pixelToHex function, assuming it exists in math-utils.js
+        // and that it correctly handles the pointy-top orientation and hex size.
+        const { q, r } = pixelToHex({ x: clickX, y: clickY }, hexSize);
+
+        // Find the clicked hex in our grid data
+        const clickedHex = this.hexGrid.getHex(q, r);
+
+        if (clickedHex) {
+            console.log(`Clicked on hex: Q=${q}, R=${r}`);
+            // TODO: Implement territory selection logic
+            // - Check if a territory is already selected
+            // - If so, and clicked hex is a valid target, perform action
+            // - If not, select this territory
+            // - Update visual feedback (highlighting)
+
+            // For now, just re-render with a different color to show selection
+            const pixelPos = hexToPixel(clickedHex.coord, hexSize);
+            const worldX = origin.x + pixelPos.x;
+            const worldY = origin.y + pixelPos.y;
+            
+            // Clear previous single hex highlight (if any)
+            // A more robust system would track the selected hex and its original color
+            this.hexGraphics.clear(); // Simple clear for now, will redraw all
+            this.renderHexGrid(); // Redraw all hexes
+
+            // Highlight the clicked hex
+            this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, COLORS.HEX_HIGHLIGHT, COLORS.HEX_BORDER_SELECTED);
+            console.log(`Highlighted hex: ${q},${r}`);
+        } else {
+            console.log('Clicked outside of any hex.');
+        }
     }
 
     /**
