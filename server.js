@@ -3,7 +3,10 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = process.env.PORT || 3000;
+// Allow specifying a different port via command line argument
+// Example: node server.js 3001
+const customPort = process.argv[2];
+const PORT = customPort || process.env.PORT || 3000;
 const MIME_TYPES = {
     '.html': 'text/html',
     '.css': 'text/css',

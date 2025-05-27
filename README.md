@@ -11,6 +11,52 @@ Colony Conquest is a turn-based territorial strategy game that features:
 - Player vs AI opponent
 - Unique "Influence Web" diplomacy system
 
+## Getting Started
+
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/mjcarpenter17/ColonyConquest.git
+   ```
+
+2. Navigate to the project directory:
+   ```
+   cd ColonyConquest
+   ```
+
+3. Install dependencies:
+   ```
+   npm install
+   ```
+
+### Running the Game
+
+1. Start the development server:
+   ```
+   node server.js
+   ```
+   This will start the server on port 3000 by default.
+
+2. Alternatively, specify a custom port:
+   ```
+   node server.js 3001
+   ```
+
+3. Open your browser and navigate to:
+   ```
+   http://localhost:3000
+   ```
+   (or the custom port you specified)
+
+### How to Play
+
+1. Click on territories to select them
+2. Manage your resources (Gold, Timber, Iron, Food)
+3. Expand your influence across the map
+4. End your turn when ready using the "End Turn" button
+5. Win by achieving one of the victory conditions
+
 ## Project Structure
 
 ```
