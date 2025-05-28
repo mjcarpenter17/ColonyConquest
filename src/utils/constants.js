@@ -200,6 +200,30 @@ export const INPUT = {
     DOUBLE_CLICK_TIME: 300 // Milliseconds
 };
 
+// UI Constants
+export const UI_CONSTANTS = {
+    // Resource Bar
+    RESOURCE_BAR_X: 20,
+    RESOURCE_BAR_Y: 20,
+    RESOURCE_BAR_PADDING: 10,
+    RESOURCE_ICON_SIZE: 32,
+    RESOURCE_SPACING: 120,
+    
+    // Territory Info Panel
+    INFO_PANEL_X: 20,
+    INFO_PANEL_Y: GAME_CONFIG.CANVAS_HEIGHT - 150,
+    INFO_PANEL_WIDTH: 250,
+    INFO_PANEL_HEIGHT: 120,
+    INFO_PANEL_PADDING: 10,
+    
+    // End Turn Button
+    END_TURN_BUTTON_X: GAME_CONFIG.CANVAS_WIDTH - 100,
+    END_TURN_BUTTON_Y: GAME_CONFIG.CANVAS_HEIGHT - 50,
+    
+    // Action Buttons
+    ACTION_BUTTON_SPACING: 15
+};
+
 // Game States
 export const GAME_STATES = {
     LOADING: 'loading',
