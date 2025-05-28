@@ -103,7 +103,7 @@ export function hexToPixel(hexCoord, size) {
  * @returns {Object} Fractional hex coordinate {q, r, s}
  */
 export function pixelToHex(point, size) {
-    const q = (HEX_CONSTANTS.ORIENTATION.b0 * point.x - HEX_CONSTANTS.ORIENTATION.b1 * point.y) / size;
+    const q = (HEX_CONSTANTS.ORIENTATION.b0 * point.x + HEX_CONSTANTS.ORIENTATION.b1 * point.y) / size; // Changed - to +
     const r = (HEX_CONSTANTS.ORIENTATION.b2 * point.x + HEX_CONSTANTS.ORIENTATION.b3 * point.y) / size;
     return hexRound(hex(q, r)); // Round to nearest hex
 }

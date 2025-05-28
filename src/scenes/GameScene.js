@@ -15,6 +15,7 @@ export class GameScene extends Phaser.Scene {
         super({ key: 'GameScene' });
         this.hexGrid = null;
         this.hexGraphics = null;
+        this.selectedHex = null; // To store the currently selected hex object/data
     }
 
     /**
@@ -100,19 +101,23 @@ export class GameScene extends Phaser.Scene {
         const hexSize = GAME_CONFIG.HEX_SIZE;
         const origin = { x: this.cameras.main.width / 2, y: this.cameras.main.height / 2 };
 
-        allHexes.forEach(hexData => { // Assuming hexData contains the coordinate as hexData.coord
-            const hexCoord = hexData.coord; 
-            const pixelPos = hexToPixel(hexCoord, hexSize); // hexToPixel should handle origin if needed, or apply here
+        allHexes.forEach(hexData => {
+            const hexCoord = hexData.coord;
+            const pixelPos = hexToPixel(hexCoord, hexSize);
             const worldX = origin.x + pixelPos.x;
             const worldY = origin.y + pixelPos.y;
 
-            // Generate a random color for each hex
-            const randomFillColor = Phaser.Display.Color.RandomRGB(100, 200).color; // Generates a color with R,G,B components between 100 and 200
+            let fillColor = COLORS.HEX_FILL;
+            let borderColor = COLORS.HEX_BORDER;
 
-            // Use random color for fill, and a defined border color from constants
-            this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, randomFillColor, COLORS.HEX_BORDER);
+            if (this.selectedHex && this.selectedHex.coord.q === hexCoord.q && this.selectedHex.coord.r === hexCoord.r) {
+                fillColor = COLORS.HEX_HIGHLIGHT;
+                borderColor = COLORS.HEX_BORDER_SELECTED;
+            }
+
+            this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, fillColor, borderColor);
         });
-        console.log(`🎨 Rendered ${allHexes.length} hexes with varied colors.`);
+        // console.log(`🎨 Rendered ${allHexes.length} hexes.`); // Adjusted log
     }
 
     /**
@@ -146,42 +151,20 @@ export class GameScene extends Phaser.Scene {
         const hexSize = GAME_CONFIG.HEX_SIZE;
         const origin = { x: this.cameras.main.width / 2, y: this.cameras.main.height / 2 };
 
-        // Convert pointer coordinates to world space relative to grid origin
         const clickX = pointer.x - origin.x;
         const clickY = pointer.y - origin.y;
 
-        // Convert pixel coordinates to hex coordinates (axial)
-        // This requires a pixelToHex function, assuming it exists in math-utils.js
-        // and that it correctly handles the pointy-top orientation and hex size.
         const { q, r } = pixelToHex({ x: clickX, y: clickY }, hexSize);
+        const clickedHexData = this.hexGrid.getHex(q, r); // Assuming getHex returns the hex data object or null
 
-        // Find the clicked hex in our grid data
-        const clickedHex = this.hexGrid.getHex(q, r);
-
-        if (clickedHex) {
-            console.log(`Clicked on hex: Q=${q}, R=${r}`);
-            // TODO: Implement territory selection logic
-            // - Check if a territory is already selected
-            // - If so, and clicked hex is a valid target, perform action
-            // - If not, select this territory
-            // - Update visual feedback (highlighting)
-
-            // For now, just re-render with a different color to show selection
-            const pixelPos = hexToPixel(clickedHex.coord, hexSize);
-            const worldX = origin.x + pixelPos.x;
-            const worldY = origin.y + pixelPos.y;
-            
-            // Clear previous single hex highlight (if any)
-            // A more robust system would track the selected hex and its original color
-            this.hexGraphics.clear(); // Simple clear for now, will redraw all
-            this.renderHexGrid(); // Redraw all hexes
-
-            // Highlight the clicked hex
-            this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, COLORS.HEX_HIGHLIGHT, COLORS.HEX_BORDER_SELECTED);
-            console.log(`Highlighted hex: ${q},${r}`);
+        if (clickedHexData) {
+            this.selectedHex = clickedHexData;
+            console.log(`Selected hex: Q=${clickedHexData.coord.q}, R=${clickedHexData.coord.r}`);
         } else {
-            console.log('Clicked outside of any hex.');
+            this.selectedHex = null;
+            console.log('Clicked outside of any hex, selection cleared.');
         }
+        this.renderHexGrid(); // Redraw the grid to reflect selection changes
     }
 
     /**
