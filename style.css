@@ -260,3 +260,42 @@ body {
     color: #3498db;
     text-align: center;
 }
+
+/* Turn Display */
+.turn-display {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: rgba(44, 62, 80, 0.9);
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    padding: 10px 15px;
+    color: #ecf0f1;
+    font-size: 18px;
+    font-weight: bold;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+    user-select: none;
+    z-index: 100;
+}
+
+.turn-number {
+    margin-bottom: 5px;
+    transition: all 0.3s ease;
+}
+
+.turn-player {
+    font-size: 16px;
+}
+
+/* Animation for turn changes */
+.turn-changed {
+    animation: turn-change-pulse 1s ease;
+    color: #f1c40f;
+}
+
+@keyframes turn-change-pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+}

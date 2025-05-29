@@ -1,0 +1,17 @@
+/* Button Interaction Effects */
+
+/* Click effect for buttons */
+.game-button.clicked img {
+    transform: scale(0.95);
+    filter: brightness(0.9);
+    transition: transform 0.1s ease-in-out, filter 0.1s ease-in-out;
+}
+
+/* End Turn button special effect */
+#end-turn-btn.clicked {
+    transform: scale(0.95);
+}
+
+#end-turn-btn.clicked img {
+    opacity: 0.8;
+}

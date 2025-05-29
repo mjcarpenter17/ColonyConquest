@@ -17,7 +17,6 @@ export class TurnManager {
         this.phaseChangeCallbacks = [];
         
         this.initializePhases();
-        console.log('🔄 TurnManager initialized');
     }
 
     /**
@@ -29,7 +28,7 @@ export class TurnManager {
             enter: () => this.enterResourceCollection(),
             execute: () => this.executeResourceCollection(),
             exit: () => this.exitResourceCollection(),
-            duration: 1000 // 1 second for automatic progression
+            duration: null // MODIFIED: Was 1000, now null to prevent auto-advance
         });
 
         // Action Phase  
@@ -53,7 +52,7 @@ export class TurnManager {
             enter: () => this.enterAITurn(),
             execute: () => this.executeAITurn(),
             exit: () => this.exitAITurn(),
-            duration: 3000 // 3 seconds for AI decisions
+            duration: null // MODIFIED: Was 3000, now null to prevent auto-advance
         });
     }
 
@@ -82,8 +81,6 @@ export class TurnManager {
      * Start a new turn
      */
     startTurn() {
-        console.log(`🎯 Starting turn ${this.gameState.currentTurn} for ${this.gameState.currentPlayer}`);
-        
         // Notify turn start callbacks
         this.turnStartCallbacks.forEach(callback => {
             callback({
@@ -104,8 +101,6 @@ export class TurnManager {
      * End current turn and advance to next
      */
     endTurn() {
-        console.log(`🏁 Ending turn for ${this.gameState.currentPlayer}`);
-        
         // Notify turn end callbacks
         this.turnEndCallbacks.forEach(callback => {
             callback({
@@ -140,8 +135,6 @@ export class TurnManager {
             callback({ oldPhase, newPhase });
         });
         
-        console.log(`📋 Phase changed: ${oldPhase} → ${newPhase}`);
-        
         // Enter new phase
         if (this.phaseActions.has(newPhase)) {
             const phaseHandler = this.phaseActions.get(newPhase);
@@ -149,11 +142,12 @@ export class TurnManager {
             phaseHandler.execute();
             
             // Auto-advance phases with duration
-            if (phaseHandler.duration) {
-                setTimeout(() => {
-                    this.advancePhase();
-                }, phaseHandler.duration);
-            }
+            // REMOVED: setTimeout block for auto-advancement
+            // if (phaseHandler.duration) {
+            //     setTimeout(() => {
+            //         this.advancePhase();
+            //     }, phaseHandler.duration);
+            // }
         }
     }
 
@@ -207,37 +201,78 @@ export class TurnManager {
      * Resource Collection Phase - Enter
      */
     enterResourceCollection() {
-        console.log('💰 Entering Resource Collection Phase');
         // UI: Show resource collection animation
-    }
-
-    /**
+    }    /**
      * Resource Collection Phase - Execute
      */
     executeResourceCollection() {
         const player = this.gameState.currentPlayer;
-        const collected = this.gameState.collectResources(player);
         
-        // Trigger UI updates to show resource gains
+        // Get resources before collection
+        const beforeResources = { ...this.gameState.getResources(player) }; // Clone before state
+        
+        // Get the resource production data from the resource manager
+        const resourceManager = this.gameState.getResourceManager();
+        
+        if (!resourceManager) {
+            console.warn('⚠️ Resource Manager not available! Cannot collect resources.');
+            // Advance phase even if resource manager is missing to avoid getting stuck
+            this.gameState.currentPhase = TURN_PHASES.ACTION_PHASE;
+            return;
+        }
+        
+        // Calculate production (for logging and event data)
+        const production = resourceManager.calculateResourceProduction(player);
+            
+        // Collect resources - this method should now update the gameState directly
+        const collectedAmounts = resourceManager.collectResources(player);
+        
+        // Get resources after collection
+        const afterResources = this.gameState.getResources(player);
+        
+        // Verify resources were actually added
+        let resourcesAdded = false;
+        Object.keys(production).forEach(type => {
+            // Check if the actual collected amount for this resource type is greater than 0
+            if (collectedAmounts[type] > 0) {
+                resourcesAdded = true;
+            }
+        });
+        
+        if (!resourcesAdded && Object.values(production).some(pVal => pVal > 0)) {
+            console.warn('⚠️ No resources were added during collection, despite expected production!');
+        } else if (resourcesAdded) {
+            // Resources successfully processed for collection
+        } else {
+            // No production expected or no resources collected.
+        }
+        
+        // Trigger UI updates to show resource gains with detailed info
+        // The event should reflect the actual amounts collected
         this.gameState.emit('resourceChanged', {
             player,
             action: 'collected',
-            amounts: collected
+            amounts: collectedAmounts, // Use actual collected amounts
+            details: {
+                production, // Expected production
+                territories: this.gameState.getTerritoriesByOwner(player).length
+            }
         });
+
+        // Advance to the next phase
+        this.gameState.currentPhase = TURN_PHASES.ACTION_PHASE;
     }
 
     /**
      * Resource Collection Phase - Exit
      */
     exitResourceCollection() {
-        console.log('✅ Resource Collection Phase complete');
     }
 
     /**
      * Action Phase - Enter
      */
     enterActionPhase() {
-        console.log('⚡ Entering Action Phase');
         const player = this.gameState.currentPlayer;
         
         if (player === OWNERS.PLAYER) {
@@ -261,7 +296,6 @@ export class TurnManager {
      * Action Phase - Exit
      */
     exitActionPhase() {
-        console.log('⚡ Action Phase complete');
         // Disable player controls if it was player's turn
         if (this.gameState.currentPlayer === OWNERS.PLAYER) {
             this.gameState.deselectTerritory();
@@ -272,7 +306,6 @@ export class TurnManager {
      * Resolution Phase - Enter
      */
     enterResolution() {
-        console.log('🎲 Entering Resolution Phase');
         // Apply any end-of-turn effects
     }
 
@@ -291,18 +324,12 @@ export class TurnManager {
      * Resolution Phase - Exit
      */
     exitResolution() {
-        console.log('🎲 Resolution Phase complete');
     }
 
     /**
      * AI Turn Phase - Enter
      */
     enterAITurn() {
-        console.log('🤖 AI Turn begins');
-        this.gameState.emit('gameStateChanged', {
-            phase: TURN_PHASES.AI_TURN,
-            message: 'AI is thinking...'
-        });
     }
 
     /**
@@ -318,7 +345,6 @@ export class TurnManager {
      * AI Turn Phase - Exit
      */
     exitAITurn() {
-        console.log('🤖 AI Turn complete');
     }
 
     // Helper Methods
@@ -329,7 +355,6 @@ export class TurnManager {
     processInfluenceChanges() {
         // Implementation for influence system
         // This will be expanded when influence mechanics are added
-        console.log('🌀 Processing influence changes...');
     }
 
     /**
@@ -365,20 +390,17 @@ export class TurnManager {
                 description: 'Resource production increased this turn',
                 effect: () => {
                     // Temporary boost effect
-                    console.log('🌪️ Trade winds boost resource production');
                 }
             },
             {
                 name: 'Market Fluctuation',
                 description: 'Territory claiming costs reduced by 1',
                 effect: () => {
-                    console.log('📈 Market fluctuation reduces claiming costs');
                 }
             }
         ];
         
         const event = events[Math.floor(Math.random() * events.length)];
-        console.log(`🎲 Random Event: ${event.name} - ${event.description}`);
         
         event.effect();
         

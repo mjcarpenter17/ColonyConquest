@@ -16,7 +16,6 @@ export class ResourceManager {
         this.resourceHistory = [];
         
         this.initializeMultipliers();
-        console.log('💰 ResourceManager initialized');
     }
 
     /**
@@ -66,13 +65,10 @@ export class ResourceManager {
     setResourceMultiplier(resourceType, multiplier, duration = null) {
         this.resourceMultipliers.set(resourceType, multiplier);
         
-        console.log(`📈 ${resourceType} multiplier set to ${multiplier}x`);
-        
         // Auto-reset after duration if specified
         if (duration) {
             setTimeout(() => {
                 this.resourceMultipliers.set(resourceType, 1.0);
-                console.log(`📉 ${resourceType} multiplier reset to 1.0x`);
             }, duration);
         }
     }
@@ -93,8 +89,6 @@ export class ResourceManager {
         const currentBoost = this.temporaryBoosts.get(key) || 0;
         this.temporaryBoosts.set(key, currentBoost + amount);
         
-        console.log(`⚡ ${player} gains +${amount} ${resourceType} boost for ${duration}ms`);
-        
         // Remove boost after duration
         setTimeout(() => {
             const newBoost = (this.temporaryBoosts.get(key) || 0) - amount;
@@ -103,7 +97,6 @@ export class ResourceManager {
             } else {
                 this.temporaryBoosts.set(key, newBoost);
             }
-            console.log(`⏰ ${player}'s ${resourceType} boost expired`);
         }, duration);
     }
 
@@ -159,19 +152,26 @@ export class ResourceManager {
         // This will be expanded when hex neighbor detection is implemented
         // For now, return 0
         return 0;
-    }
-
-    /**
+    }    /**
      * Process resource collection for a player
      */
     collectResources(player) {
         const production = this.calculateResourceProduction(player);
         const beforeResources = this.gameState.getResources(player);
+        const ownedTerritories = this.gameState.getTerritoriesByOwner(player);
+        
+        // Log individual territory production
+        // ownedTerritories.forEach(territory => { // REMOVED block
+        //     if (territory.resourceType && territory.resourceValue) {
+        //         console.log(`📊 Territory at (${territory.coord?.q},${territory.coord?.r}) produces ${territory.resourceValue} ${territory.resourceType}`);
+        //     }
+        // });
         
         // Add produced resources
         Object.entries(production).forEach(([resourceType, amount]) => {
             if (amount > 0) {
                 this.gameState.addResources(player, resourceType, amount);
+                // console.log(`📊 Added ${amount} ${resourceType} to ${player}`); // REMOVED console.log
             }
         });
         
@@ -187,7 +187,6 @@ export class ResourceManager {
             timestamp: Date.now()
         });
         
-        console.log(`💰 ${player} resource collection:`, production);
         return production;
     }
 
@@ -219,8 +218,6 @@ export class ResourceManager {
         // Spend resources and claim territory
         if (this.gameState.spendResources(player, cost)) {
             this.gameState.setTerritoryOwner(territoryId, player);
-            
-            console.log(`🏴 ${player} claimed ${territoryId} for`, cost);
             
             return {
                 success: true,
@@ -357,7 +354,6 @@ export class ResourceManager {
     resetTemporaryEffects() {
         this.temporaryBoosts.clear();
         this.initializeMultipliers();
-        console.log('🔄 All temporary resource effects reset');
     }
 
     /**

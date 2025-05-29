@@ -72,8 +72,6 @@ export class GameState {
             gameStateChanged: [],
             victoryConditionMet: []
         };
-        
-        console.log('🎮 GameState initialized');
     }
 
     /**
@@ -147,8 +145,6 @@ export class GameState {
                 oldOwner, 
                 newOwner 
             });
-            
-            console.log(`🏴 Territory ${territoryId} claimed by ${newOwner}`);
         }
     }
 
@@ -214,13 +210,25 @@ export class GameState {
         }
         
         return true;
-    }
-
-    /**
+    }    /**
      * Get player resources
      */
     getResources(player) {
         return { ...this.resources[player] };
+    }
+    
+    /**
+     * Get reference to the ResourceManager (to be set by the game)
+     */
+    getResourceManager() {
+        return this._resourceManager;
+    }
+    
+    /**
+     * Set reference to the ResourceManager
+     */
+    setResourceManager(resourceManager) {
+        this._resourceManager = resourceManager;
     }
 
     /**
@@ -238,7 +246,6 @@ export class GameState {
             collected[resourceType] += amount;
         });
         
-        console.log(`💰 ${player} collected:`, collected);
         return collected;
     }
 
@@ -257,17 +264,13 @@ export class GameState {
         
         if (this.currentPlayer === OWNERS.PLAYER) {
             this.currentPlayer = OWNERS.AI;
-            this.currentPhase = TURN_PHASES.ACTION_PHASE;
-        } else {
-            this.currentPlayer = OWNERS.PLAYER;
+            this.currentPhase = TURN_PHASES.ACTION_PHASE;        } else {
+            this.currentPlayer = OWNERS.PLAYER;            
             this.currentTurn++;
             this.currentPhase = TURN_PHASES.RESOURCE_COLLECTION;
             
-            // Collect resources for both players at start of new turn
-            this.collectResources(OWNERS.PLAYER);
-            this.collectResources(OWNERS.AI);
-            
-            this.currentPhase = TURN_PHASES.ACTION_PHASE;
+            // Note: Resource collection will be handled by the TurnManager
+            // during the RESOURCE_COLLECTION phase, not here
         }
         
         this.checkVictoryConditions();
@@ -276,8 +279,6 @@ export class GameState {
             player: this.currentPlayer,
             phase: this.currentPhase
         });
-        
-        console.log(`🔄 Turn ${this.currentTurn} - ${this.currentPlayer}'s turn`);
     }
 
     /**
@@ -344,7 +345,6 @@ export class GameState {
     triggerVictory(winner, condition) {
         this.gameStatus = GAME_STATES.VICTORY;
         this.emit('victoryConditionMet', { winner, condition });
-        console.log(`🏆 Victory! ${winner} wins by ${condition}`);
     }
 
     /**
@@ -401,7 +401,6 @@ export class GameState {
             this.updateStatistics();
             this.emit('gameStateChanged', this.getStateSummary());
             
-            console.log('📥 Game state loaded successfully');
             return true;
         } catch (error) {
             console.error('❌ Failed to load game state:', error);

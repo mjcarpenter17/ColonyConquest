@@ -1,4 +1,4 @@
-import { COLORS, UI_CONSTANTS, RESOURCE_TYPES, ASSETS } from '../utils/constants.js';
+import { COLORS, UI_CONSTANTS, RESOURCE_TYPES, ASSETS, OWNERS } from '../utils/constants.js';
 
 /**
  * Base UI Component Class
@@ -81,27 +81,57 @@ export class ResourceDisplayBar extends UIComponent {
         }
 
         // Update initial values
-        this.updateDisplay();
-
-        // Set up event listener for resource updates
+        this.updateDisplay();        // Set up event listener for resource updates
         if (this.gameState.addEventListener) {
-            this.gameState.addEventListener('resourceChanged', () => this.updateDisplay());
+            this.gameState.addEventListener('resourceChanged', (data) => this.updateDisplay(data));
         } else if (this.gameState.on) {
             this.gameState.on('resourceChanged', this.updateDisplay, this);
         }
-    }
-
-    /**
+    }    /**
      * Update the resource display with current values
+     * @param {Object} resourceChangeData - Optional data about resource changes for notifications
      */
-    updateDisplay() {
+    updateDisplay(resourceChangeData = null) {
         const resources = this.gameState.resources[this.gameState.currentPlayer] || {};
         
+        // Update resource counts
         for (const [type, element] of Object.entries(this.resourceElements)) {
             if (element && resources[type] !== undefined) {
                 element.textContent = resources[type];
+                
+                // If this update is from a resource collection, show a visual notification
+                if (resourceChangeData && 
+                    resourceChangeData.action === 'collected' && 
+                    resourceChangeData.amounts && 
+                    resourceChangeData.amounts[type] > 0) {
+                    
+                    this.showResourceGainNotification(type, resourceChangeData.amounts[type], element);
+                }
             }
         }
+    }
+    
+    /**
+     * Show a visual notification when resources are gained
+     * @param {string} resourceType - Type of resource gained
+     * @param {number} amount - Amount of resource gained
+     * @param {HTMLElement} element - The DOM element to animate
+     */
+    showResourceGainNotification(resourceType, amount, element) {
+        // Create a temporary notification element
+        const notification = document.createElement('div');
+        notification.className = 'resource-notification';
+        notification.textContent = `+${amount}`;
+        
+        // Position it near the resource counter
+        element.parentNode.style.position = 'relative';
+        element.parentNode.appendChild(notification);
+        
+        // Animate the notification
+        setTimeout(() => {
+            notification.classList.add('fadeout');
+            setTimeout(() => notification.remove(), 1000);
+        }, 50);
     }
 
     destroy() {
@@ -262,25 +292,39 @@ export class EndTurnButton extends UIComponent {
             .on('pointerdown', () => this.endTurn());
         return this.addPhaserObject(button);
     }
-    */
-
-    /**
+    */    /**
      * Handle the end turn action
      */
     endTurn() {
-        console.log('End Turn button clicked');
+        console.log('🎮 End Turn button clicked - advancing turn...');
+        
+        // Add visual feedback that the button was clicked
+        if (this.buttonElement) {
+            this.buttonElement.classList.add('clicked');
+            setTimeout(() => {
+                this.buttonElement.classList.remove('clicked');
+            }, 200);
+        }
+        
         if (this.turnManager) {
-            if (typeof this.turnManager.nextTurn === 'function') {
-                this.turnManager.nextTurn();
-            } else if (typeof this.turnManager.endTurn === 'function') {
+            console.log('🎮 Using turnManager to end turn');
+            
+            // Prefer endTurn over nextTurn method
+            if (typeof this.turnManager.endTurn === 'function') {
                 this.turnManager.endTurn();
+                console.log('🎮 Turn ended successfully');
+            } else if (typeof this.turnManager.nextTurn === 'function') {
+                this.turnManager.nextTurn();
+                console.log('🎮 Advanced to next turn');
             } else {
-                console.warn('TurnManager does not have nextTurn or endTurn methods');
+                console.warn('⚠️ TurnManager does not have nextTurn or endTurn methods');
             }
         } else {
-            console.warn('TurnManager not available');
+            console.warn('⚠️ TurnManager not available for EndTurnButton');
+            
             // Fallback: directly update gameState if TurnManager is not available
             if (this.gameState && typeof this.gameState.nextTurn === 'function') {
+                console.log('🎮 Using gameState.nextTurn() as fallback');
                 this.gameState.nextTurn();
             }
         }
@@ -296,12 +340,85 @@ export class EndTurnButton extends UIComponent {
     }
 }
 
+/**
+ * TurnDisplay Class
+ * Shows the current turn number and player
+ */
+export class TurnDisplay extends UIComponent {
+    constructor(scene, gameState) {
+        super(scene, UI_CONSTANTS.TURN_DISPLAY_X, UI_CONSTANTS.TURN_DISPLAY_Y);
+        this.gameState = gameState;
+        
+        // Create container for the turn display
+        const container = document.createElement('div');
+        container.id = 'turn-display';
+        container.className = 'turn-display';
+        document.body.appendChild(container);
+        this.addDomElement(container);
+        
+        // Create elements to show turn number and current player
+        this.turnNumberElement = document.createElement('div');
+        this.turnNumberElement.className = 'turn-number';
+        container.appendChild(this.turnNumberElement);
+        
+        this.playerElement = document.createElement('div');
+        this.playerElement.className = 'turn-player';
+        container.appendChild(this.playerElement);
+        
+        // Initial update
+        this.updateDisplay();
+        
+        // Listen for turn changes
+        if (this.gameState.addEventListener) {
+            this.gameState.addEventListener('turnChanged', (data) => this.updateDisplay(data));
+        }
+    }
+    
+    /**
+     * Update the turn display
+     */
+    updateDisplay(data) {
+        const currentTurn = this.gameState.currentTurn || 1;
+        const currentPlayer = this.gameState.currentPlayer || OWNERS.PLAYER;
+        
+        // Update turn number with animation
+        if (data && data.turn !== undefined) {
+            // Add change animation
+            this.turnNumberElement.classList.add('turn-changed');
+            setTimeout(() => {
+                this.turnNumberElement.classList.remove('turn-changed');
+            }, 1000);
+        }
+        
+        this.turnNumberElement.textContent = `Turn: ${currentTurn}`;
+        this.playerElement.textContent = `Player: ${currentPlayer}`;
+        
+        // Set different styles based on the current player
+        if (currentPlayer === OWNERS.PLAYER) {
+            this.playerElement.style.color = '#3498db'; // blue
+        } else if (currentPlayer === OWNERS.AI) {
+            this.playerElement.style.color = '#e74c3c'; // red
+        }
+    }
+    
+    /**
+     * Clean up the component
+     */
+    destroy() {
+        if (this.gameState.removeEventListener) {
+            this.gameState.removeEventListener('turnChanged', this.updateDisplay);
+        }
+        super.destroy();
+    }
+}
+
 // Export the components
 export default {
     ResourceDisplayBar,
     TerritoryInformationPanel,
     ActionButton,
-    EndTurnButton
+    EndTurnButton,
+    TurnDisplay
 };
 
 console.log('UIComponents module loaded');
