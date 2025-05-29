@@ -147,12 +147,99 @@ export class ResourceManager {
 
     /**
      * Calculate neighbor bonus for territory claiming
-     */
-    calculateNeighborBonus(territory, player) {
-        // This will be expanded when hex neighbor detection is implemented
-        // For now, return 0
-        return 0;
+     */    calculateNeighborBonus(territory, player) {
+        // Calculate discount based on adjacent owned territories
+        let bonus = 0;
+        const hexGrid = this.gameState.getHexGrid();
+        
+        if (hexGrid && territory.q !== undefined && territory.r !== undefined) {
+            const neighbors = hexGrid.getNeighbors(territory.q, territory.r);
+            let adjacentOwned = 0;
+            
+            neighbors.forEach(neighbor => {
+                if (neighbor && neighbor.owner === player) {
+                    adjacentOwned++;
+                }
+            });
+            
+            // Grant 1 resource discount per adjacent territory (max 3)
+            bonus = Math.min(3, adjacentOwned);
+        }
+        
+        return bonus;
     }    /**
+     * Spend resources for a player with validation and transaction logging
+     */
+    spendResources(player, cost) {
+        // Validate inputs
+        if (!player || typeof player !== 'string') {
+            return { success: false, reason: 'invalid_player' };
+        }
+        
+        if (!cost || typeof cost !== 'object') {
+            return { success: false, reason: 'invalid_cost' };
+        }
+        
+        // Check if player exists
+        if (!this.gameState.getResources(player)) {
+            return { success: false, reason: 'player_not_found' };
+        }
+        
+        // Check if player can afford the cost
+        if (!this.canAfford(player, cost)) {
+            return { 
+                success: false, 
+                reason: 'insufficient_resources',
+                cost: cost,
+                available: this.gameState.getResources(player)
+            };
+        }
+        
+        // Get resources before spending (for logging)
+        const beforeResources = { ...this.gameState.getResources(player) };
+        
+        // Deduct resources using GameState method
+        const spendSuccess = this.gameState.spendResources(player, cost);
+        
+        if (!spendSuccess) {
+            return { success: false, reason: 'failed_to_spend' };
+        }
+        
+        // Get resources after spending
+        const afterResources = this.gameState.getResources(player);
+        
+        // Record transaction in history
+        this.recordTransaction(player, 'spend', cost, beforeResources, afterResources);
+        
+        // Emit event for UI updates
+        this.gameState.emit('resourceChanged', {
+            player,
+            action: 'spent',
+            amounts: cost,
+            before: beforeResources,
+            after: afterResources,
+            details: { transaction: 'resource_spending' }
+        });
+        
+        return { success: true, cost, after: afterResources };
+    }
+
+    /**
+     * Record a resource transaction in history
+     */
+    recordTransaction(player, action, amounts, beforeResources, afterResources) {
+        this.resourceHistory.push({
+            turn: this.gameState.currentTurn,
+            player: player,
+            action: action,
+            amounts: amounts,
+            before: beforeResources,
+            after: afterResources,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
      * Process resource collection for a player
      */
     collectResources(player) {
@@ -188,9 +275,7 @@ export class ResourceManager {
         });
         
         return production;
-    }
-
-    /**
+    }    /**
      * Attempt to claim a territory
      */
     claimTerritory(territoryId, player) {
@@ -200,33 +285,36 @@ export class ResourceManager {
             return { success: false, reason: 'Territory not found' };
         }
         
-        if (territory.owner !== null) {
+        if (territory.owner !== null && territory.owner !== OWNERS.NEUTRAL) {
             return { success: false, reason: 'Territory already owned' };
         }
         
         const cost = this.getTerritoryClaimCost(territory, player);
         
-        if (!this.canAfford(player, cost)) {
-            return { 
-                success: false, 
-                reason: 'Insufficient resources',
-                cost: cost,
-                available: this.gameState.getResources(player)
-            };
+        // Use the enhanced spending system
+        const spendResult = this.spendResources(player, cost);
+        
+        if (!spendResult.success) {
+            return spendResult; // Return the detailed spending result
         }
         
-        // Spend resources and claim territory
-        if (this.gameState.spendResources(player, cost)) {
-            this.gameState.setTerritoryOwner(territoryId, player);
-            
-            return {
-                success: true,
-                territory: territory,
-                cost: cost
-            };
-        }
+        // Claim the territory
+        this.gameState.setTerritoryOwner(territoryId, player);
         
-        return { success: false, reason: 'Failed to spend resources' };
+        // Emit territory claimed event
+        this.gameState.emit('territoryChanged', { 
+            action: 'claimed', 
+            territory, 
+            player,
+            cost
+        });
+        
+        return {
+            success: true,
+            territory: territory,
+            cost: cost,
+            resourcesAfter: spendResult.after
+        };
     }
 
     /**

@@ -153,9 +153,13 @@ export class GameScene extends Phaser.Scene {    constructor() {
             if (this.uiRenderer) {
                 this.uiRenderer.updatePhaseDisplay(data.newPhase);
             }
-        });
-          // Listen for resource changes
+        });          // Listen for resource changes
         this.gameState.addEventListener('resourceChanged', (data) => {
+            // Update UI resource display
+            if (this.uiRenderer) {
+                this.uiRenderer.updateResourceDisplay();
+            }
+            
             // Show notification if resources were collected
             if (data.action === 'collected' && this.notificationManager) {
                 const territoryCount = data.details?.territories || 
@@ -170,6 +174,28 @@ export class GameScene extends Phaser.Scene {    constructor() {
                         `Resources collected from ${territoryCount} territories`, 
                         'info', 
                         2500
+                    );
+                }
+            }
+            
+            // Show spending animation if resources were spent
+            if (data.action === 'spent' && this.uiRenderer) {
+                this.uiRenderer.components.resourceBar.showSpendingAnimation(data.amounts);
+            }
+        });
+
+        // Listen for territory changes
+        this.gameState.addEventListener('territoryChanged', (data) => {
+            // Re-render hex grid when territories change ownership
+            if (data.action === 'claimed') {
+                this.renderHexGrid();
+                
+                // Show territory claimed notification
+                if (this.notificationManager) {
+                    this.notificationManager.show(
+                        `Territory claimed for ${this.formatCost(data.cost)}!`,
+                        'success',
+                        3000
                     );
                 }
             }
@@ -374,5 +400,15 @@ export class GameScene extends Phaser.Scene {    constructor() {
         
         // Re-render the grid to show the player's territories
         this.renderHexGrid();
+    }
+    
+    /**
+     * Format resource cost for display in notifications
+     */
+    formatCost(cost) {
+        return Object.entries(cost)
+            .filter(([type, amount]) => amount > 0)
+            .map(([type, amount]) => `${amount} ${type}`)
+            .join(', ');
     }
 }

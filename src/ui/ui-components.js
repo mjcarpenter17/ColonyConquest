@@ -1,4 +1,4 @@
-import { COLORS, UI_CONSTANTS, RESOURCE_TYPES, ASSETS, OWNERS } from '../utils/constants.js';
+import { COLORS, UI_CONSTANTS, RESOURCE_TYPES, ASSETS, OWNERS, TURN_PHASES } from '../utils/constants.js';
 
 /**
  * Base UI Component Class
@@ -144,6 +144,46 @@ export class ResourceDisplayBar extends UIComponent {
         this.domElements = [];
         super.destroy();
     }
+
+    /**
+     * Show resource spending animation
+     */
+    showSpendingAnimation(cost) {
+        Object.entries(cost).forEach(([resourceType, amount]) => {
+            if (amount > 0) {
+                const resourceElement = document.getElementById(`${resourceType}-count`);
+                if (resourceElement) {
+                    // Create spending indicator
+                    const spendIndicator = document.createElement('div');
+                    spendIndicator.className = 'resource-spend-indicator';
+                    spendIndicator.textContent = `-${amount}`;
+                    spendIndicator.style.cssText = `
+                        position: absolute;
+                        color: #ff4444;
+                        font-weight: bold;
+                        font-size: 14px;
+                        pointer-events: none;
+                        z-index: 1000;
+                        animation: spendFloat 1.5s ease-out forwards;
+                    `;
+                    
+                    // Position relative to the resource element
+                    const rect = resourceElement.getBoundingClientRect();
+                    spendIndicator.style.left = `${rect.left + rect.width + 5}px`;
+                    spendIndicator.style.top = `${rect.top}px`;
+                    
+                    document.body.appendChild(spendIndicator);
+                    
+                    // Remove after animation
+                    setTimeout(() => {
+                        if (spendIndicator.parentNode) {
+                            spendIndicator.parentNode.removeChild(spendIndicator);
+                        }
+                    }, 1500);
+                }
+            }
+        });
+    }
 }
 
 /**
@@ -180,9 +220,7 @@ export class TerritoryInformationPanel extends UIComponent {
         this.scene.events.on('territorySelected', (territory) => {
             this.updatePanel(territory);
         });
-    }
-
-    /**
+    }    /**
      * Update the territory panel with information about the selected territory
      */
     updatePanel(territory) {
@@ -199,6 +237,9 @@ export class TerritoryInformationPanel extends UIComponent {
                     <p><strong>Resource:</strong> ${resourceText}</p>
                     ${territory.influence ? `<p><strong>Influence:</strong> ${territory.influence}</p>` : ''}
                 `;
+                
+                // Add claim button if territory is neutral and it's the player's turn
+                this.addClaimButton(territory);
             }
             this.show();
         } else {
@@ -206,6 +247,108 @@ export class TerritoryInformationPanel extends UIComponent {
                 this.detailsElement.innerHTML = '<p>No territory selected</p>';
             }
             this.hide();
+        }
+    }
+
+    /**
+     * Add claim territory button if applicable
+     */
+    addClaimButton(territory) {
+        // Remove existing claim button if any
+        const existingButton = document.getElementById('claim-territory-btn');
+        if (existingButton) {
+            existingButton.remove();
+        }
+
+        // Only show claim button for neutral territories during player's action phase
+        if (territory.owner === null || territory.owner === OWNERS.NEUTRAL) {
+            if (this.gameState.currentPlayer === OWNERS.PLAYER && 
+                this.gameState.currentPhase === TURN_PHASES.ACTION_PHASE) {
+                
+                const resourceManager = this.gameState.getResourceManager();
+                if (resourceManager) {
+                    const cost = resourceManager.getTerritoryClaimCost(territory, OWNERS.PLAYER);
+                    const canAfford = resourceManager.canAfford(OWNERS.PLAYER, cost);
+                    
+                    // Create claim button
+                    const claimButton = document.createElement('button');
+                    claimButton.id = 'claim-territory-btn';
+                    claimButton.className = canAfford ? 'claim-btn affordable' : 'claim-btn unaffordable';
+                    claimButton.innerHTML = `
+                        <div class="claim-btn-content">
+                            <span>Claim Territory</span>
+                            <div class="cost-display">
+                                <small>Costs: ${this.formatCost(cost)}</small>
+                            </div>
+                        </div>
+                    `;
+                    
+                    if (canAfford) {
+                        claimButton.addEventListener('click', () => this.claimTerritory(territory));
+                    } else {
+                        claimButton.disabled = true;
+                        claimButton.title = 'Insufficient resources';
+                    }
+                    
+                    // Add button to the territory details panel
+                    this.detailsElement.appendChild(claimButton);
+                }
+            }
+        }
+    }
+
+    /**
+     * Format resource cost for display
+     */
+    formatCost(cost) {
+        return Object.entries(cost)
+            .filter(([type, amount]) => amount > 0)
+            .map(([type, amount]) => `${amount} ${type}`)
+            .join(', ');
+    }
+
+    /**
+     * Handle territory claiming
+     */
+    claimTerritory(territory) {
+        const resourceManager = this.gameState.getResourceManager();
+        if (!resourceManager) {
+            console.warn('ResourceManager not available');
+            return;
+        }
+
+        const territoryId = territory.id || `${territory.coord.q},${territory.coord.r}`;
+        const result = resourceManager.claimTerritory(territoryId, OWNERS.PLAYER);
+        
+        if (result.success) {
+            // Show success notification
+            if (this.scene.notificationManager) {
+                this.scene.notificationManager.show(
+                    `Territory claimed! Spent: ${this.formatCost(result.cost)}`,
+                    'success',
+                    3000
+                );
+            }
+            
+            // Update the panel to reflect the new ownership
+            this.updatePanel(territory);
+            
+            // Re-render the hex grid to show ownership change
+            if (this.scene.renderHexGrid) {
+                this.scene.renderHexGrid();
+            }
+        } else {
+            // Show error notification
+            let message = 'Failed to claim territory';
+            if (result.reason === 'insufficient_resources') {
+                message = `Not enough resources! Need: ${this.formatCost(result.cost)}`;
+            } else if (result.reason === 'Territory already owned') {
+                message = 'Territory is already owned';
+            }
+            
+            if (this.scene.notificationManager) {
+                this.scene.notificationManager.show(message, 'error', 3000);
+            }
         }
     }
 }
