@@ -8,14 +8,17 @@ import { GAME_CONFIG, COLORS, RESOURCE_TYPES, UI_CONSTANTS, ASSETS, OWNERS } fro
 import { ResourceDisplayBar, TerritoryInformationPanel, EndTurnButton, ActionButton, TurnDisplay } from './ui-components.js';
 
 export class UIRenderer {
-    constructor(scene, gameState, turnManager = null) {
+    constructor(scene, gameState, turnManager = null, gameEventBus = null, territoryManager = null) { // Added gameEventBus and territoryManager
         this.scene = scene;
         this.gameState = gameState;
         this.turnManager = turnManager;
+        this.gameEventBus = gameEventBus; // Store gameEventBus
+        this.territoryManager = territoryManager; // Store territoryManager
         this.uiLayer = null; // Phaser Group for UI elements
         this.components = {}; // Store UI component instances
         
         this.initialize();
+        this._subscribeToEvents(); // Subscribe to relevant events
     }
 
     /**
@@ -39,7 +42,7 @@ export class UIRenderer {
         this.components.resourceBar = new ResourceDisplayBar(this.scene, this.gameState);
         
         // Territory Information Panel (uses existing HTML elements)
-        this.components.territoryPanel = new TerritoryInformationPanel(this.scene, this.gameState);
+        this.components.territoryPanel = new TerritoryInformationPanel(this.scene, this.gameState, this.gameEventBus, this.territoryManager);
         
         // End Turn Button (uses existing HTML button)
         if (this.turnManager) {
@@ -80,12 +83,29 @@ export class UIRenderer {
         return button;
     }
     
+    _subscribeToEvents() {
+        if (!this.gameEventBus) return;
+
+        this.gameEventBus.on(this.gameEventBus.events.TERRITORY_SELECTED, this.onTerritorySelected, this);
+        this.gameEventBus.on(this.gameEventBus.events.TERRITORY_DESELECTED, this.onTerritoryDeselected, this);
+    }
+
     /**
      * Handle territory selection
      */
-    onTerritorySelected(territory) {
+    onTerritorySelected(eventData) { // Changed parameter to eventData
+        const territory = eventData.territory; // Extract territory from eventData
         if (this.components.territoryPanel) {
             this.components.territoryPanel.updatePanel(territory);
+        }
+    }
+
+    /**
+     * Handle territory deselection
+     */
+    onTerritoryDeselected() {
+        if (this.components.territoryPanel) {
+            this.components.territoryPanel.clearPanel();
         }
     }
 

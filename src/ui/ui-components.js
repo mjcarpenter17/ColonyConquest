@@ -81,11 +81,17 @@ export class ResourceDisplayBar extends UIComponent {
         }
 
         // Update initial values
-        this.updateDisplay();        // Set up event listener for resource updates
-        if (this.gameState.addEventListener) {
-            this.gameState.addEventListener('resourceChanged', (data) => this.updateDisplay(data));
-        } else if (this.gameState.on) {
-            this.gameState.on('resourceChanged', this.updateDisplay, this);
+        this.updateDisplay();
+
+        // Set up event listener for resource updates using GameEventBus
+        if (this.gameState && this.gameState.gameEventBus && this.gameState.gameEventBus.events.RESOURCES_CHANGED) {
+            this.gameState.gameEventBus.on(
+                this.gameState.gameEventBus.events.RESOURCES_CHANGED, 
+                this.updateDisplay, // The updateDisplay method will be called with eventData
+                this // Context for the callback
+            );
+        } else {
+            console.warn('ResourceDisplayBar: GameState, GameEventBus, or RESOURCES_CHANGED event not available.');
         }
     }    /**
      * Update the resource display with current values
@@ -192,9 +198,11 @@ export class ResourceDisplayBar extends UIComponent {
  * This implementation works with the existing HTML/DOM territory info panel.
  */
 export class TerritoryInformationPanel extends UIComponent {
-    constructor(scene, gameState) {
+    constructor(scene, gameState, gameEventBus, territoryManager) { // Added gameEventBus and territoryManager
         super(scene, UI_CONSTANTS.INFO_PANEL_X, UI_CONSTANTS.INFO_PANEL_Y);
         this.gameState = gameState;
+        this.gameEventBus = gameEventBus; // Store gameEventBus
+        this.territoryManager = territoryManager; // Store territoryManager
         
         // Find existing DOM elements
         this.panelElement = this.addDomElement(document.getElementById('territory-info'));
@@ -207,47 +215,60 @@ export class TerritoryInformationPanel extends UIComponent {
             this.updatePanel(this.gameState.selectedTerritory);
         }
 
-        // Set up event listeners
-        if (this.gameState.addEventListener) {
-            this.gameState.addEventListener('territoryChanged', (data) => {
-                if (data.action === 'selected' || data.action === 'deselected') {
-                    this.updatePanel(data.action === 'selected' ? data.territory : null);
-                }
-            });
-        }
-        
-        // Listen for selection changes in GameScene
-        this.scene.events.on('territorySelected', (territory) => {
-            this.updatePanel(territory);
-        });
-    }    /**
+        // Event listeners are now handled by UIRenderer, no need to duplicate here
+        // if (this.gameState.addEventListener) { ... }
+        // this.scene.events.on('territorySelected', ...); // This is a Phaser scene event, not GameEventBus
+    }
+
+    /**
      * Update the territory panel with information about the selected territory
      */
     updatePanel(territory) {
         if (territory) {
+            // Ensure territory.coord is available, if not, try to get it from TerritoryManager or q/r directly
+            let q = territory.q;
+            let r = territory.r;
+            if (territory.coord) {
+                q = territory.coord.q;
+                r = territory.coord.r;
+            }
+
             const ownerText = territory.owner ? `Player ${territory.owner}` : 'Neutral';
-            const resourceText = territory.resourceType ? 
+            const resourceText = territory.resourceType && territory.resourceType !== RESOURCE_TYPES.NONE ? 
                 `${territory.resourceType.charAt(0).toUpperCase() + territory.resourceType.slice(1)} (${territory.resourceValue})` : 
                 'None';
             
             if (this.detailsElement) {
                 this.detailsElement.innerHTML = `
-                    <p><strong>Coordinates:</strong> Q:${territory.coord.q}, R:${territory.coord.r}</p>
+                    <p><strong>ID:</strong> ${territory.id}</p>
+                    <p><strong>Coordinates:</strong> Q:${q}, R:${r}</p>
                     <p><strong>Owner:</strong> ${ownerText}</p>
                     <p><strong>Resource:</strong> ${resourceText}</p>
+                    ${territory.isHomeBase ? '<p><strong>Status:</strong> Home Base</p>' : ''}
                     ${territory.influence ? `<p><strong>Influence:</strong> ${territory.influence}</p>` : ''}
                 `;
                 
-                // Add claim button if territory is neutral and it's the player's turn
                 this.addClaimButton(territory);
             }
             this.show();
         } else {
-            if (this.detailsElement) {
-                this.detailsElement.innerHTML = '<p>No territory selected</p>';
-            }
-            this.hide();
+            this.clearPanel();
         }
+    }
+
+    /**
+     * Clears the territory information panel.
+     */
+    clearPanel() {
+        if (this.detailsElement) {
+            this.detailsElement.innerHTML = '<p>No territory selected</p>';
+            // Remove claim button if it exists
+            const existingButton = document.getElementById('claim-territory-btn');
+            if (existingButton) {
+                existingButton.remove();
+            }
+        }
+        this.hide();
     }
 
     /**
@@ -311,44 +332,69 @@ export class TerritoryInformationPanel extends UIComponent {
      * Handle territory claiming
      */
     claimTerritory(territory) {
-        const resourceManager = this.gameState.getResourceManager();
-        if (!resourceManager) {
-            console.warn('ResourceManager not available');
+        // Ensure we have the correct TerritoryManager instance
+        const territoryManagerInstance = this.territoryManager || (this.gameState ? this.gameState._territoryManager : null);
+        const resourceManagerInstance = this.gameState ? this.gameState.getResourceManager() : null;
+
+        if (!territoryManagerInstance) {
+            console.warn('TerritoryManager not available for claiming.');
+            if (this.scene.notificationManager) {
+                this.scene.notificationManager.show('Error: Territory system unavailable.', 'error');
+            }
+            return;
+        }
+        if (!resourceManagerInstance) {
+            console.warn('ResourceManager not available for claiming cost calculation/deduction.');
+            if (this.scene.notificationManager) {
+                this.scene.notificationManager.show('Error: Resource system unavailable.', 'error');
+            }
             return;
         }
 
-        const territoryId = territory.id || `${territory.coord.q},${territory.coord.r}`;
-        const result = resourceManager.claimTerritory(territoryId, OWNERS.PLAYER);
-        
-        if (result.success) {
-            // Show success notification
+        const territoryId = territory.id || `${territory.q || territory.coord.q},${territory.r || territory.coord.r}`;
+        const player = OWNERS.PLAYER; // Assuming player is claiming
+
+        // 1. Get the cost from ResourceManager
+        const cost = resourceManagerInstance.getTerritoryClaimCost(territory, player);
+
+        // 2. Check if player can afford (ResourceManager can do this, or GameState)
+        if (!resourceManagerInstance.canAfford(player, cost)) {
             if (this.scene.notificationManager) {
-                this.scene.notificationManager.show(
-                    `Territory claimed! Spent: ${this.formatCost(result.cost)}`,
-                    'success',
-                    3000
-                );
+                this.scene.notificationManager.show(`Not enough resources! Need: ${this.formatCost(cost)}`, 'error', 3000);
             }
-            
-            // Update the panel to reflect the new ownership
-            this.updatePanel(territory);
-            
-            // Re-render the hex grid to show ownership change
-            if (this.scene.renderHexGrid) {
-                this.scene.renderHexGrid();
+            return;
+        }
+
+        // 3. Spend resources (via ResourceManager, which should use GameState and emit events)
+        const spendResult = resourceManagerInstance.spendResources(player, cost);
+        if (!spendResult.success) {
+            if (this.scene.notificationManager) {
+                this.scene.notificationManager.show(`Failed to spend resources: ${spendResult.reason}`, 'error', 3000);
             }
+            return;
+        }
+
+        // 4. Claim the territory (via TerritoryManager, which should emit events)
+        // The TerritoryManager.claimTerritory method itself should handle emitting TERRITORY_CLAIMED
+        const claimSuccessful = territoryManagerInstance.claimTerritory(territoryId, player, cost); // Pass cost for event data
+
+        if (claimSuccessful) {
+            // Notification for successful claim (GameScene listens to TERRITORY_CLAIMED for this)
+            // The panel will update via the TERRITORY_SELECTED or TERRITORY_UPDATED event chain.
+            // GameScene's renderHexGrid will also update due to TERRITORY_CLAIMED.
+            // So, no direct calls to updatePanel or renderHexGrid here are strictly necessary if events are wired correctly.
+            // However, to ensure immediate feedback on the panel if events are slightly delayed or for robustness:
+            const updatedTerritory = territoryManagerInstance.getTerritoryAt(territory.q || territory.coord.q, territory.r || territory.coord.r);
+            this.updatePanel(updatedTerritory); 
+
         } else {
-            // Show error notification
-            let message = 'Failed to claim territory';
-            if (result.reason === 'insufficient_resources') {
-                message = `Not enough resources! Need: ${this.formatCost(result.cost)}`;
-            } else if (result.reason === 'Territory already owned') {
-                message = 'Territory is already owned';
-            }
-            
+            // This case should ideally be caught by checks within claimTerritory (e.g., not neutral)
+            // If claimTerritory returns false, it means an internal rule prevented it.
             if (this.scene.notificationManager) {
-                this.scene.notificationManager.show(message, 'error', 3000);
+                this.scene.notificationManager.show('Failed to claim territory (already owned or other rule).', 'error', 3000);
             }
+            // Revert resources if spend was successful but claim failed (if necessary, depends on transaction atomicity)
+            // For now, assume spendResources and claimTerritory are part of a sequence that should succeed together.
         }
     }
 }

@@ -3,7 +3,7 @@
  * Manages individual hexagonal territory properties and state
  */
 
-import { CONSTANTS } from '../utils/constants.js';
+import { RESOURCE_TYPES } from '../utils/constants.js';
 
 export class Territory {
     constructor(q, r, s = null) {
@@ -40,11 +40,11 @@ export class Territory {
      */
     generateResourceType() {
         const weights = {
-            [CONSTANTS.RESOURCE_TYPES.FOOD]: 30,
-            [CONSTANTS.RESOURCE_TYPES.WOOD]: 25,
-            [CONSTANTS.RESOURCE_TYPES.STONE]: 20,
-            [CONSTANTS.RESOURCE_TYPES.IRON]: 15,
-            [CONSTANTS.RESOURCE_TYPES.GOLD]: 10
+            [RESOURCE_TYPES.FOOD]: 30,
+            [RESOURCE_TYPES.WOOD]: 25,
+            [RESOURCE_TYPES.STONE]: 20,
+            [RESOURCE_TYPES.IRON]: 15,
+            [RESOURCE_TYPES.GOLD]: 10
         };
         
         const random = Math.random() * 100;
@@ -66,11 +66,11 @@ export class Territory {
      */
     generateResourceValue() {
         const baseValues = {
-            [CONSTANTS.RESOURCE_TYPES.FOOD]: { min: 2, max: 5 },
-            [CONSTANTS.RESOURCE_TYPES.WOOD]: { min: 2, max: 4 },
-            [CONSTANTS.RESOURCE_TYPES.STONE]: { min: 1, max: 3 },
-            [CONSTANTS.RESOURCE_TYPES.IRON]: { min: 1, max: 2 },
-            [CONSTANTS.RESOURCE_TYPES.GOLD]: { min: 1, max: 2 }
+            [RESOURCE_TYPES.FOOD]: { min: 2, max: 5 },
+            [RESOURCE_TYPES.WOOD]: { min: 2, max: 4 },
+            [RESOURCE_TYPES.STONE]: { min: 1, max: 3 },
+            [RESOURCE_TYPES.IRON]: { min: 1, max: 2 },
+            [RESOURCE_TYPES.GOLD]: { min: 1, max: 2 }
         };
         
         const range = baseValues[this.resourceType] || { min: 1, max: 3 };

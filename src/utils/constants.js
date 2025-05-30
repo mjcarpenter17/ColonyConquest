@@ -53,8 +53,10 @@ export const GAME_CONFIG = {
 export const RESOURCE_TYPES = {
     GOLD: 'gold',
     WOOD: 'wood', 
-    METAL: 'metal',
-    FOOD: 'food'
+    METAL: 'metal', // NOTE: MapGenerator currently uses STONE and IRON, not METAL.
+    FOOD: 'food',
+    STONE: 'stone', // Added to match MapGenerator
+    IRON: 'iron'    // Added to match MapGenerator
 };
 
 // Territory Types
@@ -68,7 +70,10 @@ export const TERRITORY_TYPES = {
 export const OWNERS = {
     NEUTRAL: null,
     PLAYER: 'player',
-    AI: 'ai'
+    AI: 'ai', // Generic AI
+    AI_1: 'ai_1',
+    AI_2: 'ai_2',
+    AI_3: 'ai_3'
 };
 
 // Hex Grid Mathematics Constants

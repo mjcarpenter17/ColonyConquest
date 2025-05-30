@@ -6,27 +6,34 @@
 import { HexGrid } from '../map/hex-grid.js';
 import { GAME_CONFIG, COLORS, OWNERS, RESOURCE_TYPES } from '../utils/constants.js';
 import { hexToPixel, pixelToHex } from '../utils/math-utils.js';
-import { GameState } from '../core/game-state.js'; // Added GameState import
-import { UIRenderer } from '../ui/renderer.js'; // Added UIRenderer import
-import InputHandler from '../ui/input-handler.js'; // Added InputHandler import
-import { TurnManager } from '../core/turn-manager.js'; // Import TurnManager
-import { ResourceManager } from '../core/resource-manager.js'; // Import ResourceManager
-import { NotificationManager } from '../ui/notification.js'; // Import NotificationManager
+import { GameState } from '../core/game-state.js';
+import { UIRenderer } from '../ui/renderer.js';
+import InputHandler from '../ui/input-handler.js';
+import { TurnManager } from '../core/turn-manager.js';
+import { ResourceManager } from '../core/resource-manager.js';
+import { NotificationManager } from '../ui/notification.js';
+import { Territory } from '../map/territory.js'; // Import the Territory class
+import { TerritoryManager } from '../core/TerritoryManager.js';
+import { MapGenerator } from '../map/map-generator.js';
+import { GameEventBus } from '../core/GameEventBus.js';
 
 /**
  * GameScene class - Main gameplay scene for Phaser
  */
-export class GameScene extends Phaser.Scene {    constructor() {
+export class GameScene extends Phaser.Scene {
+    constructor() {
         super({ key: 'GameScene' });
         this.hexGrid = null;
         this.hexGraphics = null;
-        this.selectedHex = null;
-        this.gameState = null; // Initialized gameState
-        this.resourceManager = null; // Resource manager for handling resource operations
-        this.turnManager = null; // Turn manager for handling turn sequences
-        this.uiRenderer = null; // Initialized uiRenderer
-        this.inputHandler = null; // Initialized inputHandler
-        this.notificationManager = null; // Notification system
+        this.gameState = null;
+        this.resourceManager = null;
+        this.turnManager = null;
+        this.uiRenderer = null;
+        this.inputHandler = null;
+        this.notificationManager = null;
+        this.territoryManager = null;
+        this.mapGenerator = null;
+        this.gameEventBus = null;
     }
 
     /**
@@ -76,8 +83,18 @@ export class GameScene extends Phaser.Scene {    constructor() {
         // Resource icons
         this.load.image('rss_info_gold', 'assets/images/RSS_Info_Gold.png');
         this.load.image('rss_info_wood', 'assets/images/RSS_Info_Wood.png');
-        this.load.image('rss_info_metal', 'assets/images/RSS_Info_Metal.png');
+        this.load.image('rss_info_metal', 'assets/images/RSS_Info_Metal.png'); // Corresponds to IRON
         this.load.image('rss_info_food', 'assets/images/RSS_Info_Food.png');
+        this.load.image('rss_info_stone', 'assets/images/RSS_Info_Stone.png'); // New icon for STONE
+
+        // Define a mapping for resource types to icon keys
+        this.resourceIconKeys = {
+            [RESOURCE_TYPES.GOLD]: 'rss_info_gold',
+            [RESOURCE_TYPES.WOOD]: 'rss_info_wood',
+            [RESOURCE_TYPES.IRON]: 'rss_info_metal', // Assuming 'metal' icon is for IRON
+            [RESOURCE_TYPES.FOOD]: 'rss_info_food',
+            [RESOURCE_TYPES.STONE]: 'rss_info_stone'
+        };
         
         // Button assets
         this.load.image('end_turn_button', 'assets/images/endTurn_02.png');
@@ -91,31 +108,52 @@ export class GameScene extends Phaser.Scene {    constructor() {
      * Create the game scene
      */
     create() {
+        // Initialize GameEventBus first
+        this.gameEventBus = new GameEventBus();
+
         // Initialize GameState
-        this.gameState = new GameState();
+        this.gameState = new GameState(this.gameEventBus);
         
-        // Initialize ResourceManager and connect it to the GameState
-        this.resourceManager = new ResourceManager(this.gameState);
+        // Initialize HexGrid
+        this.hexGrid = new HexGrid(GAME_CONFIG.GRID_SIZE);
+        this.gameState.setHexGrid(this.hexGrid); 
+
+        // Initialize TerritoryManager
+        // It needs the event bus for broadcasting, game state for context, and hexGrid for validation
+        this.territoryManager = new TerritoryManager(this.gameEventBus, this.gameState, this.hexGrid);
+        this.gameState.setTerritoryManager(this.territoryManager);
+
+        // Initialize ResourceManager
+        this.resourceManager = new ResourceManager(this.gameState, this.gameEventBus, this.territoryManager);
         this.gameState.setResourceManager(this.resourceManager);
         
         // Initialize TurnManager
-        this.turnManager = new TurnManager(this.gameState);
+        this.turnManager = new TurnManager(this.gameState, this.gameEventBus);
         
-        // Create the hex grid
-        this.hexGrid = new HexGrid(GAME_CONFIG.GRID_SIZE);
+        // Initialize MapGenerator - it will use TerritoryManager to create territories
+        this.mapGenerator = new MapGenerator(this.hexGrid, this.territoryManager);
+
+        // Initialize the game map (generate territories)
+        this.initializeMap();
+
+        // Graphics for hex grid
         this.hexGraphics = this.add.graphics();
-        this.renderHexGrid();        // Setup input handling
-        this.input.on('pointerdown', this.handleTileClick, this);        // Initialize Notification Manager
+        this.renderHexGrid();
+
+        // Setup input handling
+        this.input.on('pointerdown', this.handleTileClick, this);
+
+        // Initialize Notification Manager
         this.notificationManager = new NotificationManager(this);
 
-        // Initialize UI Renderer with the turn manager
-        this.uiRenderer = new UIRenderer(this, this.gameState, this.turnManager);        // Initialize Input Handler
-        this.inputHandler = new InputHandler(this, this.gameState, this.uiRenderer);
+        // Initialize UI Renderer
+        this.uiRenderer = new UIRenderer(this, this.gameState, this.turnManager, this.gameEventBus, this.territoryManager);
         
-        // Set up turn event listeners
-        this.setupTurnEventHandlers();
-          // Set up test territories for resource collection testing
-        this.assignTestTerritoriesToPlayer();
+        // Initialize Input Handler
+        this.inputHandler = new InputHandler(this, this.gameState, this.uiRenderer, this.gameEventBus, this.territoryManager);
+        
+        // Set up event listeners
+        this.setupEventHandlers();
         
         // Add keyboard shortcut for testing end turn
         this.input.keyboard.on('keydown-T', () => {
@@ -131,75 +169,163 @@ export class GameScene extends Phaser.Scene {    constructor() {
     }
     
     /**
-     * Set up event handlers for turn and phase changes
+     * Initialize the game map by generating territories.
      */
-    setupTurnEventHandlers() {        // Listen for turn start events
-        this.turnManager.onTurnStart((data) => {
-            // Update UI for new turn
-            if (this.uiRenderer) {
-                this.uiRenderer.updateTurnDisplay(data.turn, data.player);
-                // Force update the resource display
-                this.uiRenderer.updateResourceDisplay();
-            }
-        });
-        
-        // Listen for turn end events
-        this.turnManager.onTurnEnd((data) => {
-        });
-        
-        // Listen for phase changes
-        this.turnManager.onPhaseChange((data) => {
-            // Update UI for new phase
-            if (this.uiRenderer) {
-                this.uiRenderer.updatePhaseDisplay(data.newPhase);
-            }
-        });          // Listen for resource changes
-        this.gameState.addEventListener('resourceChanged', (data) => {
-            // Update UI resource display
-            if (this.uiRenderer) {
-                this.uiRenderer.updateResourceDisplay();
-            }
-            
-            // Show notification if resources were collected
-            if (data.action === 'collected' && this.notificationManager) {
-                const territoryCount = data.details?.territories || 
-                  this.gameState.getTerritoriesByOwner(data.player).length;
-                
-                // Display notification for resource collection
-                this.notificationManager.showResourceCollection(data.amounts, data.player);
-                
-                // Show a summary notification with territory count
-                if (territoryCount > 0) {
-                    this.notificationManager.show(
-                        `Resources collected from ${territoryCount} territories`, 
-                        'info', 
-                        2500
-                    );
-                }
-            }
-            
-            // Show spending animation if resources were spent
-            if (data.action === 'spent' && this.uiRenderer) {
-                this.uiRenderer.components.resourceBar.showSpendingAnimation(data.amounts);
-            }
-        });
+    initializeMap() {
+        if (!this.mapGenerator) {
+            console.error("MapGenerator not initialized!");
+            return;
+        }
+        // The MapGenerator's generateBalancedMap method should now directly use
+        // territoryManager.createTerritory or a similar method to populate territories.
+        // It might return the raw generated data or simply confirm completion.
+        // For this example, let's assume generateBalancedMap tells TerritoryManager what to do.
+        this.mapGenerator.generateBalancedMap(2); // Generates a map for 2 players
 
-        // Listen for territory changes
-        this.gameState.addEventListener('territoryChanged', (data) => {
-            // Re-render hex grid when territories change ownership
-            if (data.action === 'claimed') {
+        console.log(`🗺️ Game map initialized via MapGenerator and TerritoryManager.`);
+        
+        // Optional: Log a simple preview of the map to the console
+        // this.logMapPreview(); 
+    }
+
+    /**
+     * Set up event handlers for game events
+     */
+    setupEventHandlers() { 
+        // Clear any old listeners from GameState if they weren't removed during its refactor
+        // (GameState's old event system should be gone, but this is a safeguard if any remnants existed)
+
+        // --- Turn Manager Events (Phaser Emitter based) ---
+        if (this.turnManager) {
+            this.turnManager.onTurnStart((data) => {
+                if (this.uiRenderer) {
+                    this.uiRenderer.updateTurnDisplay(data.turn, data.player);
+                    this.uiRenderer.updateResourceDisplay();
+                }
+            });
+            this.turnManager.onTurnEnd((data) => {
+                // Handle turn end UI if needed
+            });
+            this.turnManager.onPhaseChange((data) => {
+                if (this.uiRenderer) {
+                    this.uiRenderer.updatePhaseDisplay(data.newPhase);
+                }
+            });
+        }
+
+        // --- GameEventBus Events ---
+        if (this.gameEventBus) {
+            // Territory Selection/Deselection
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_SELECTED, (eventData) => {
+                // GameState._handleTerritorySelected will update gameState.selectedTerritory
+                // We just need to re-render.
                 this.renderHexGrid();
-                
-                // Show territory claimed notification
-                if (this.notificationManager) {
+                // console.log('GameScene: TERRITORY_SELECTED event processed, re-rendering grid.', eventData.territory ? eventData.territory.id : 'None');
+            });
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_DESELECTED, (eventData) => {
+                // GameState._handleTerritoryDeselected will update gameState.selectedTerritory
+                this.renderHexGrid();
+                // console.log('GameScene: TERRITORY_DESELECTED event processed, re-rendering grid.');
+            });
+
+            // Territory Data Changes (triggers re-render)
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_CREATED, (territory) => {
+                this.renderHexGrid();
+            });
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_UPDATED, (eventData) => {
+                // eventData: { territoryId, changes, territoryData }
+                this.renderHexGrid();
+                // Potentially show notification for specific updates if needed
+            });
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_CLAIMED, (eventData) => {
+                // eventData: { action, territoryId, newOwner, oldOwner, cost, territoryData }
+                this.renderHexGrid();
+                if (this.notificationManager && eventData.cost) {
                     this.notificationManager.show(
-                        `Territory claimed for ${this.formatCost(data.cost)}!`,
+                        `${eventData.territoryData.id} claimed by ${eventData.newOwner} for ${this.formatCost(eventData.cost)}!`,
                         'success',
                         3000
                     );
                 }
-            }
-        });
+            });
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORY_OWNERSHIP_CHANGED, (eventData) => {
+                // eventData: { territory, newOwner, oldOwner }
+                // This might be redundant if TERRITORY_CLAIMED or TERRITORY_UPDATED already cause a re-render
+                // and handle notifications. However, if direct ownership changes can happen outside of claims/updates,
+                // this listener is useful.
+                this.renderHexGrid();
+            });
+
+            // Map Initialization (triggers re-render)
+            this.gameEventBus.on(this.gameEventBus.events.MAP_INITIALIZED, (eventData) => {
+                // eventData: { territoryCount }
+                this.renderHexGrid();
+                console.log(`GameScene: MAP_INITIALIZED event received, ${eventData.territoryCount} territories. Grid re-rendered.`);
+            });
+            this.gameEventBus.on(this.gameEventBus.events.TERRITORIES_CLEARED, () => {
+                this.renderHexGrid(); // Render an empty grid or default state
+            });
+
+            // Resource Changes
+            this.gameEventBus.on(this.gameEventBus.events.RESOURCES_CHANGED, (eventData) => {
+                // eventData: { player, changedResources, reason }
+                if (this.uiRenderer) {
+                    this.uiRenderer.updateResourceDisplay(); // General UI update
+                }
+
+                const player = eventData.player;
+                const changedResources = eventData.changedResources;
+                const reason = eventData.reason;
+
+                if (this.notificationManager) {
+                    if (reason === 'collection') {
+                        // ResourceManager now emits RESOURCES_COLLECTED which includes amounts and territory count
+                        // This specific 'collection' reason might be redundant if we listen to RESOURCES_COLLECTED directly
+                        // For now, let's assume RESOURCES_CHANGED with reason 'collection' is primary.
+                        // We need the actual amounts collected, which are in changedResources.
+                        const collectedAmounts = changedResources; // These are positive values
+                        this.notificationManager.showResourceCollection(collectedAmounts, player);
+                        
+                        // To get territory count, we might need it passed in eventData or query TM
+                        // const territoryCount = this.territoryManager.getTerritoriesByOwner(player).filter(t => t.resourceType !== RESOURCE_TYPES.NONE).length;
+                        // if (territoryCount > 0) {
+                        //     this.notificationManager.show(
+                        //         `Resources collected from ${territoryCount} producing territories`,
+                        //         'info',
+                        //         2500
+                        //     );
+                        // }
+                    } else if (reason === 'spent' && this.uiRenderer && this.uiRenderer.components.resourceBar) {
+                        // changedResources here will have negative values for spending
+                        const spentAmounts = {};
+                        for (const type in changedResources) {
+                            spentAmounts[type] = -changedResources[type]; // Make positive for display
+                        }
+                        this.uiRenderer.components.resourceBar.showSpendingAnimation(spentAmounts);
+                    }
+                }
+            });
+            
+            this.gameEventBus.on(this.gameEventBus.events.RESOURCES_COLLECTED, (eventData) => {
+                // eventData: { player, collectedAmounts, territoryCount }
+                if (this.notificationManager) {
+                    this.notificationManager.showResourceCollection(eventData.collectedAmounts, eventData.player);
+                    if (eventData.territoryCount > 0) {
+                         this.notificationManager.show(
+                            `Resources collected from ${eventData.territoryCount} territories`,
+                            'info',
+                            2500
+                        );
+                    }
+                }
+                // uiRenderer.updateResourceDisplay() is already called by RESOURCES_CHANGED, which is also emitted.
+            });
+
+        }
+
+        // REMOVE OLD LISTENERS
+        // this.gameState.removeEventListener('resourceChanged', ...); // Example, ensure all old listeners are gone
+        // this.gameEventBus.off('TERRITORY_CHANGED', ...); // If any old string-based listeners were on gameEventBus
     }
       /**
      * Start the game and first turn
@@ -212,45 +338,122 @@ export class GameScene extends Phaser.Scene {    constructor() {
      * Render the hexagonal grid
      */
     renderHexGrid() {
-        if (!this.hexGrid) {
-            console.error('HexGrid not initialized!');
+        if (!this.hexGrid || !this.territoryManager || !this.gameState) {
+            console.error('HexGrid, TerritoryManager, or GameState not initialized for rendering!');
             return;
         }
-        if (this.hexGraphics) {
-            this.hexGraphics.clear(); // Clear previous graphics
-        } else {
-            this.hexGraphics = this.add.graphics();
+        this.hexGraphics.clear();
+
+        // Clear previous resource icons before re-rendering
+        if (this.resourceIconsGroup) {
+            this.resourceIconsGroup.clear(true, true); // Destroy children
         }
 
-        const allHexes = this.hexGrid.getAllHexes();
+        const allHexCoords = this.hexGrid.getAllHexes(); 
         const hexSize = GAME_CONFIG.HEX_SIZE;
         const origin = { x: this.cameras.main.width / 2, y: this.cameras.main.height / 2 };
 
-        allHexes.forEach(hexData => {
-            const hexCoord = hexData.coord;
-            const pixelPos = hexToPixel(hexCoord, hexSize);
+        allHexCoords.forEach(hexCoordData => {
+            const { q, r } = hexCoordData.coord; // Correctly access q, r from hexCoordData.coord
+            const pixelPos = hexToPixel({ q, r }, hexSize);
             const worldX = origin.x + pixelPos.x;
             const worldY = origin.y + pixelPos.y;
 
-            let fillColor = COLORS.HEX_FILL;
+            let fillColor = COLORS.HEX_EMPTY_FILL; 
             let borderColor = COLORS.HEX_BORDER;
+            let borderWidth = GAME_CONFIG.HEX_LINE_THICKNESS;
 
-            if (this.selectedHex && this.selectedHex.coord.q === hexCoord.q && this.selectedHex.coord.r === hexCoord.r) {
-                fillColor = COLORS.HEX_HIGHLIGHT;
-                borderColor = COLORS.HEX_BORDER_SELECTED;
+            const territory = this.territoryManager.getTerritoryAt(q, r);
+
+            if (territory) { 
+                switch (territory.owner) {
+                    case OWNERS.PLAYER:
+                        fillColor = COLORS.PLAYER_TERRITORY;
+                        break;
+                    case OWNERS.AI: // Assuming a single AI for now, or use specific AI IDs
+                        fillColor = COLORS.AI_TERRITORY; // Ensure this is defined in constants
+                        break;
+                    case OWNERS.NEUTRAL:
+                        fillColor = COLORS.NEUTRAL_TERRITORY;
+                        break;
+                    default: 
+                        fillColor = COLORS.NEUTRAL_TERRITORY; 
+                        break;
+                }
+
+                if (territory.isHomeBase) {
+                    borderColor = COLORS.HOME_BASE_BORDER; 
+                    borderWidth = GAME_CONFIG.HEX_LINE_THICKNESS * 2; // Thicker border for home bases
+                }
+                
+                // Highlight if selected - use gameState.selectedTerritory
+                if (this.gameState.selectedTerritory && this.gameState.selectedTerritory.id === territory.id) {
+                    fillColor = COLORS.HEX_HIGHLIGHT; 
+                    borderColor = COLORS.HEX_BORDER_SELECTED;
+                    borderWidth = GAME_CONFIG.HEX_LINE_THICKNESS * 1.5;
+                }
+
+                this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, fillColor, borderColor, borderWidth);
+
+                // Add visual indicators for resources (e.g., small icons)
+                if (territory.resourceType && territory.resourceType !== RESOURCE_TYPES.NONE) {
+                    this.drawResourceIcon(worldX, worldY, territory.resourceType, territory.resourceValue);
+                }
+
+            } else {
+                fillColor = COLORS.HEX_OUT_OF_BOUNDS; 
+                this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, fillColor, borderColor, borderWidth);
             }
 
-            this.drawHexagon(this.hexGraphics, worldX, worldY, hexSize, fillColor, borderColor);
         });
-        // console.log(`🎨 Rendered ${allHexes.length} hexes.`); // Adjusted log
+    }
+
+    /**
+     * Draw a resource icon on a territory
+     * @param {number} x - Center X position of the hex
+     * @param {number} y - Center Y position of the hex
+     * @param {string} resourceType - Type of resource (e.g., RESOURCE_TYPES.WOOD)
+     * @param {number} resourceValue - Value of the resource
+     */
+    drawResourceIcon(x, y, resourceType, resourceValue) {
+        const iconKey = this.resourceIconKeys[resourceType];
+        if (iconKey && this.textures.exists(iconKey)) {
+            // Remove previous icon if it exists for this hex (q,r) to prevent stacking
+            // This requires a way to track icons, e.g., storing them in a group or map
+            // For simplicity, we'll assume for now that re-rendering clears them or they are part of a container.
+            // A more robust solution would be to manage these icons as Phaser GameObjects.
+
+            const iconScale = 0.3; // Adjust as needed
+            const icon = this.add.image(x, y - GAME_CONFIG.HEX_SIZE * 0.3, iconKey).setScale(iconScale);
+            
+            // Add text for resource value
+            const valueText = this.add.text(x, y + GAME_CONFIG.HEX_SIZE * 0.1, resourceValue.toString(), {
+                font: '10px Arial',
+                fill: '#ffffff',
+                align: 'center'
+            }).setOrigin(0.5);
+
+            // Group them or add to a specific layer if needed for z-ordering or management
+            // For now, they are added directly to the scene.
+            // Consider adding to a Phaser Group that can be cleared/updated in renderHexGrid.
+            if (!this.resourceIconsGroup) {
+                this.resourceIconsGroup = this.add.group();
+            }
+            this.resourceIconsGroup.add(icon);
+            this.resourceIconsGroup.add(valueText);
+
+
+        } else {
+            console.warn(`GameScene: Icon key '${iconKey}' for resource type '${resourceType}' not found or texture does not exist.`);
+        }
     }
 
     /**
      * Draw a hexagon at the specified position
      */
-    drawHexagon(graphics, x, y, size, fillColor, lineColor) {
-        graphics.lineStyle(GAME_CONFIG.HEX_LINE_THICKNESS, lineColor, 1.0);
-        graphics.fillStyle(fillColor, 1.0); // Using full opacity for fill now
+    drawHexagon(graphics, x, y, size, fillColor, lineColor, lineWidth = GAME_CONFIG.HEX_LINE_THICKNESS) { // Added lineWidth parameter
+        graphics.lineStyle(lineWidth, lineColor, 1.0);
+        graphics.fillStyle(fillColor, 1.0); 
         const points = [];
         for (let i = 0; i < 6; i++) {
             // Adjusted angle for pointy-top hexagons
@@ -278,47 +481,41 @@ export class GameScene extends Phaser.Scene {    constructor() {
         const clickY = pointer.y - origin.y;
 
         const { q, r } = pixelToHex({ x: clickX, y: clickY }, hexSize);
-        const clickedHexData = this.hexGrid.getHex(q, r); // Assuming getHex returns the hex data object or null
+        
+        const clickedHexData = this.hexGrid.getHex(q, r);
+        let clickedTerritory = null;
 
-        if (clickedHexData) {
-            this.selectedHex = clickedHexData;
-            
-            // Update the gameState's selectedTerritory if it supports it
-            if (this.gameState.selectTerritory && typeof this.gameState.selectTerritory === 'function') {
-                this.gameState.selectTerritory(clickedHexData.id);
+        if (clickedHexData) { 
+            clickedTerritory = this.territoryManager.getTerritoryAt(q, r);
+
+            if (clickedTerritory) {
+                // If this territory is already selected, deselect it.
+                // Otherwise, select it.
+                if (this.gameState.selectedTerritory && this.gameState.selectedTerritory.id === clickedTerritory.id) {
+                    this.gameEventBus.emitTerritoryDeselected(clickedTerritory); 
+                } else {
+                    this.gameEventBus.emitTerritorySelected(clickedTerritory, this.gameState.selectedTerritory);
+                }
             } else {
-                // Store directly in gameState as a fallback
-                this.gameState.selectedTerritory = clickedHexData;
+                // Clicked on a valid hex in the grid, but no territory data.
+                // Deselect any currently selected territory.
+                if (this.gameState.selectedTerritory) {
+                    this.gameEventBus.emitTerritoryDeselected(this.gameState.selectedTerritory);
+                }
+                console.log(`Empty hex selected: Q: ${q}, R: ${r}. No territory data.`);
+                // Optionally, emit an event for empty hex click if needed by other systems
+                // this.gameEventBus.emit('EMPTY_HEX_CLICKED', { q, r });
             }
-            
-            // Emit an event that UI components can listen for
-            this.events.emit('territorySelected', clickedHexData);
-            
-            // Notify the UI renderer if it has a handler
-            if (this.uiRenderer && this.uiRenderer.onTerritorySelected) {
-                this.uiRenderer.onTerritorySelected(clickedHexData);
+        } else { 
+            // Click is outside the defined hex grid. Deselect any currently selected territory.
+            if (this.gameState.selectedTerritory) {
+                this.gameEventBus.emitTerritoryDeselected(this.gameState.selectedTerritory);
             }
-        } else {
-            this.selectedHex = null;
-            
-            // Clear selected territory in gameState
-            if (this.gameState.deselectTerritory && typeof this.gameState.deselectTerritory === 'function') {
-                this.gameState.deselectTerritory();
-            } else {
-                // Clear directly in gameState as a fallback
-                this.gameState.selectedTerritory = null;
-            }
-            
-            // Emit a selection cleared event
-            this.events.emit('territorySelected', null);
-            
-            // Notify the UI renderer if it has a handler
-            if (this.uiRenderer && this.uiRenderer.onTerritorySelected) {
-                this.uiRenderer.onTerritorySelected(null);
-            }
+            console.log('Clicked outside of defined grid.');
         }
         
-        this.renderHexGrid(); // Redraw the grid to reflect selection changes
+        // No direct call to renderHexGrid() here. 
+        // The event handlers for TERRITORY_SELECTED/DESELECTED will trigger the re-render.
     }
 
     /**
@@ -357,49 +554,44 @@ export class GameScene extends Phaser.Scene {    constructor() {
      * Assign test territories to the player for testing resource collection
      */
     assignTestTerritoriesToPlayer() {
-        // Get a few territories at different positions to assign to the player
-        const testPositions = [
-            { q: 0, r: 0 },    // Center - gold territory
-            { q: 1, r: -1 },   // Northeast - wood territory
-            { q: -1, r: 2 }    // Southwest - metal territory
-        ];
+        // This method is DEPRECATED. 
+        // Initial territory setup, ownership, and resources are now handled by
+        // MapGenerator in conjunction with TerritoryManager during the initializeMap() phase.
+        console.warn("DEPRECATED: assignTestTerritoriesToPlayer() called. Map generation handles this.");
         
-        testPositions.forEach((pos, index) => {
-            // Generate hex key based on coordinates
-            const hexKey = `${pos.q},${pos.r}`;
-            let territory = this.hexGrid.getHex(pos.q, pos.r);
-            
+        /*
+        // If you need to MANUALLY override or assign specific territories for DEBUGGING
+        // AFTER the initial map generation, you could do something like this:
+        
+        const debugAssignments = [
+            { q: 0, r: 0, owner: OWNERS.PLAYER, resourceType: RESOURCE_TYPES.GOLD, resourceValue: 5, isHomeBase: true },
+            { q: 1, r: -1, owner: OWNERS.AI_1, resourceType: RESOURCE_TYPES.WOOD, resourceValue: 3, isHomeBase: true },
+        ];
+
+        debugAssignments.forEach(config => {
+            let territory = this.territoryManager.getTerritoryAt(config.q, config.r);
             if (territory) {
-                // Assign to player
-                territory.owner = OWNERS.PLAYER;
+                territory.owner = config.owner;
+                territory.resourceType = config.resourceType;
+                territory.resourceValue = config.resourceValue;
+                territory.isHomeBase = config.isHomeBase || false;
                 
-                // Set different resource types and values for testing
-                switch (index) {
-                    case 0:
-                        territory.resourceType = RESOURCE_TYPES.GOLD;
-                        territory.resourceValue = 2;
-                        break;
-                    case 1:
-                        territory.resourceType = RESOURCE_TYPES.WOOD;
-                        territory.resourceValue = 3;
-                        break;
-                    case 2:
-                        territory.resourceType = RESOURCE_TYPES.METAL;
-                        territory.resourceValue = 1;
-                        break;
-                }
-                
-                // Add territory to game state if it's not already there
-                if (this.gameState && !this.gameState.territories.has(hexKey)) {
-                    this.gameState.territories.set(hexKey, territory);
-                }
+                // Important: Notify systems of this manual change if TerritoryManager doesn't do it automatically
+                this.gameEventBus.emit('TERRITORY_CHANGED', { 
+                    action: 'manual_override', 
+                    territoryId: territory.id, 
+                    data: territory 
+                });
+                console.log(`DEBUG: Manually updated territory ${territory.id} at ${config.q},${config.r}`);
             } else {
-                console.warn(`⚠️ Could not find territory at ${hexKey}`);
+                // You might need to create it if it doesn't exist, though this is less ideal for overrides
+                // this.territoryManager.createTerritory(config.q, config.r, config.owner, config.resourceType, config.resourceValue, config.isHomeBase);
+                console.warn(`DEBUG: Territory at ${config.q},${config.r} not found for manual override.`);
             }
         });
         
-        // Re-render the grid to show the player's territories
-        this.renderHexGrid();
+        this.renderHexGrid(); // Re-render to show debug changes
+        */
     }
     
     /**

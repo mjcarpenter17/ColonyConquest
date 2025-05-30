@@ -246,21 +246,6 @@ export class TurnManager {
         } else {
             // No production expected or no resources collected.
         }
-        
-        // Trigger UI updates to show resource gains with detailed info
-        // The event should reflect the actual amounts collected
-        this.gameState.emit('resourceChanged', {
-            player,
-            action: 'collected',
-            amounts: collectedAmounts, // Use actual collected amounts
-            details: {
-                production, // Expected production
-                territories: this.gameState.getTerritoriesByOwner(player).length
-            }
-        });
-
-        // Advance to the next phase
-        this.gameState.currentPhase = TURN_PHASES.ACTION_PHASE;
     }
 
     /**
