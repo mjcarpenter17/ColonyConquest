@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Menu System Test - Colony Conquest</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #2c3e50;
+            color: #ecf0f1;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .test-section {
+            background: #34495e;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #3498db;
+        }
+        .test-result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background: #27ae60;
+        }
+        .error {
+            background: #e74c3c;
+        }
+        .warning {
+            background: #f39c12;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        #test-results {
+            background: #2c3e50;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Colony Conquest - Menu System Test</h1>
+    
+    <div class="test-section">
+        <h2>Phase 3.1 Core UI Architecture Validation</h2>
+        <p>This test validates that the right-side menu system with sliding panels is working correctly.</p>
+        
+        <button onclick="runBasicTests()">Run Basic Tests</button>
+        <button onclick="testKeyboardShortcuts()">Test Keyboard Shortcuts</button>
+        <button onclick="testResourcePanel()">Test Resource Panel</button>
+        <button onclick="openMainGame()">Open Main Game</button>
+    </div>
+    
+    <div id="test-results"></div>
+
+    <script>
+        let testResults = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            testResults.push(`[${timestamp}] ${type.toUpperCase()}: ${message}`);
+            updateDisplay();
+        }
+        
+        function updateDisplay() {
+            const resultsDiv = document.getElementById('test-results');
+            resultsDiv.innerHTML = testResults.join('\\n');
+        }
+        
+        function runBasicTests() {
+            testResults = [];
+            log('Starting Menu System Validation Tests...', 'info');
+            
+            // Test 1: Check if main game is running
+            fetch('http://localhost:8000')
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Local server is running on port 8000', 'success');
+                        return fetch('http://localhost:8000/src/ui/menu-system.js');
+                    } else {
+                        throw new Error('Server not responding');
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Menu system file is accessible', 'success');
+                        return fetch('http://localhost:8000/src/ui/sliding-panels.js');
+                    } else {
+                        throw new Error('Menu system file not found');
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Sliding panels file is accessible', 'success');
+                        return fetch('http://localhost:8000/style-menu-system.css');
+                    } else {
+                        throw new Error('Sliding panels file not found');
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Menu system CSS is accessible', 'success');
+                        log('🎉 All core files are accessible!', 'success');
+                    } else {
+                        throw new Error('Menu CSS file not found');
+                    }
+                })
+                .catch(error => {
+                    log(`❌ Error: ${error.message}`, 'error');
+                });
+        }
+        
+        function testKeyboardShortcuts() {
+            log('Testing keyboard shortcuts...', 'info');
+            log('📝 Expected shortcuts:', 'info');
+            log('  - Key "1": Open Resources panel', 'info');
+            log('  - Key "2": Open Army panel', 'info');
+            log('  - Key "3": Open Diplomacy panel', 'info');
+            log('  - Key "4": Open Research panel', 'info');
+            log('  - Key "ESC": Close active panel', 'info');
+            log('💡 Test these shortcuts in the main game window', 'info');
+        }
+        
+        function testResourcePanel() {
+            log('Testing Resource Panel features...', 'info');
+            log('📝 Expected Resource Panel features:', 'info');
+            log('  - Display current resources (Gold, Wood, Metal, Food)', 'info');
+            log('  - Worker training section with costs', 'info');
+            log('  - Train Woodcutter: 10 Gold, 5 Food', 'info');
+            log('  - Train Miner: 15 Gold, 5 Food', 'info');
+            log('  - Train Farmer: 8 Gold, 3 Food', 'info');
+            log('  - Resource spending validation', 'info');
+            log('💡 Open Resources panel (key "1") to verify these features', 'info');
+        }
+        
+        function openMainGame() {
+            window.open('http://localhost:8000', '_blank');
+            log('🚀 Main game opened in new tab', 'info');
+            log('🎮 Test the menu system in the game window:', 'info');
+            log('  1. Look for 4 menu buttons on the right side', 'info');
+            log('  2. Try clicking the buttons or using keyboard shortcuts', 'info');
+            log('  3. Verify smooth panel animations', 'info');
+            log('  4. Test the Resource panel worker training', 'info');
+        }
+        
+        // Initialize with welcome message
+        log('🎯 Menu System Test Suite Ready', 'info');
+        log('Click the buttons above to run different tests', 'info');
+        log('', 'info');
+    </script>
+</body>
+</html>

@@ -265,7 +265,7 @@ body {
 .turn-display {
     position: absolute;
     top: 20px;
-    right: 20px;
+    left: 20px;
     background-color: rgba(44, 62, 80, 0.9);
     border: 2px solid #3498db;
     border-radius: 8px;

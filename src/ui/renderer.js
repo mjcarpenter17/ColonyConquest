@@ -6,6 +6,9 @@
 
 import { GAME_CONFIG, COLORS, RESOURCE_TYPES, UI_CONSTANTS, ASSETS, OWNERS } from '../utils/constants.js';
 import { ResourceDisplayBar, TerritoryInformationPanel, EndTurnButton, ActionButton, TurnDisplay } from './ui-components.js';
+import { MenuSystem } from './menu-system.js';
+import { SlidingPanels } from './sliding-panels.js';
+import { ResourcePanel } from './panel-components.js';
 
 export class UIRenderer {
     constructor(scene, gameState, turnManager = null, gameEventBus = null, territoryManager = null) { // Added gameEventBus and territoryManager
@@ -55,6 +58,15 @@ export class UIRenderer {
         // Turn Display
         this.components.turnDisplay = new TurnDisplay(this.scene, this.gameState);
         
+        // Menu System - Right-side menu controller
+        this.components.menuSystem = new MenuSystem(this.scene, this.gameState, this.gameEventBus);
+        
+        // Sliding Panels - Panel animation and content system
+        this.components.slidingPanels = new SlidingPanels(this.scene, this.gameState, this.gameEventBus);
+        
+        // Resource Panel Component - Enhanced resource management
+        this.components.resourcePanel = new ResourcePanel(this.scene, this.gameState, this.gameEventBus);
+        
         // Action buttons can be added as needed
         // this.components.actionButtons = [];
     }
@@ -82,12 +94,31 @@ export class UIRenderer {
         
         return button;
     }
-    
-    _subscribeToEvents() {
+      _subscribeToEvents() {
         if (!this.gameEventBus) return;
 
         this.gameEventBus.on(this.gameEventBus.events.TERRITORY_SELECTED, this.onTerritorySelected, this);
         this.gameEventBus.on(this.gameEventBus.events.TERRITORY_DESELECTED, this.onTerritoryDeselected, this);
+        
+        // Listen for panel events to update resource panel content
+        this.gameEventBus.on('panelRequested', this.onPanelRequested, this);
+    }
+
+    /**
+     * Handle panel requests
+     */
+    onPanelRequested(data) {
+        if (data.action === 'open' && data.panelType === 'resource') {
+            // Update resource panel content when it opens
+            if (this.components.resourcePanel) {
+                this.components.resourcePanel.show();
+            }
+        } else if (data.action === 'close' && data.panelType === 'resource') {
+            // Hide resource panel when it closes
+            if (this.components.resourcePanel) {
+                this.components.resourcePanel.hide();
+            }
+        }
     }
 
     /**
